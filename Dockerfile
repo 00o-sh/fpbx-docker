@@ -111,6 +111,16 @@ COPY build-freepbx.sh /usr/local/src/build-freepbx.sh
 RUN chmod +x /usr/local/src/build-freepbx.sh \
   && /usr/local/src/build-freepbx.sh "${FREEPBX_VERSION}"
 
+# Enable FreePBX Apache site (installed by the package) and drop the default
+RUN a2dissite 000-default 2>/dev/null || true \
+  && if [ -f /etc/apache2/sites-available/freepbx.conf ]; then \
+       a2ensite freepbx; \
+     else \
+       printf '<VirtualHost *:80>\n  DocumentRoot /var/www/html\n  <Directory /var/www/html>\n    AllowOverride All\n    Require all granted\n  </Directory>\n</VirtualHost>\n' \
+         > /etc/apache2/sites-available/freepbx.conf \
+       && a2ensite freepbx; \
+     fi
+
 # Copy configs and entrypoint
 # Note: odbc.ini is generated at runtime by entrypoint.sh from env vars
 COPY config/odbc/odbcinst.ini /etc/odbcinst.ini
