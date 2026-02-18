@@ -96,6 +96,7 @@ RUN apt-get update \
 
 # Copy Asterisk from builder
 COPY --from=builder /usr/sbin/asterisk /usr/sbin/
+COPY --from=builder /usr/lib64/libasterisk* /usr/lib64/
 COPY --from=builder /usr/lib64/asterisk/ /usr/lib64/asterisk/
 COPY --from=builder /var/lib/asterisk/ /var/lib/asterisk/
 COPY --from=builder /var/spool/asterisk/ /var/spool/asterisk/
