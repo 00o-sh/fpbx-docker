@@ -137,8 +137,16 @@ fi
 
 # Post-install module setup (matches official sng_freepbx_debian_install.sh)
 echo ">>> Running fwconsole post-install..."
-fwconsole ma install pms || true
-fwconsole ma enable pms || true
+
+# Remove commercial modules that cannot work without a license
+# (same approach as official script's --opensourceonly mode)
+echo ">>> Removing unlicensed commercial modules..."
+fwconsole ma list 2>/dev/null | awk '/Commercial/ {print $2}' | while read -r mod; do
+  echo "  removing commercial module: $mod"
+  fwconsole ma -f remove "$mod" 2>/dev/null || true
+done
+
+# Install and enable open-source modules that were flagged as missing
 fwconsole ma install recordings || true
 fwconsole ma enable recordings || true
 fwconsole ma installlocal || true
