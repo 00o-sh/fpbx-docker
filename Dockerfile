@@ -72,7 +72,7 @@ RUN apt-get update \
     unixodbc odbc-mariadb \
     # Utilities
     sox lame ffmpeg mpg123 sqlite3 uuid expect sudo \
-    net-tools sngrep flite ghostscript libtiff-tools at cron \
+    net-tools sngrep flite at cron \
     # Apache & PHP 8.2
     apache2 \
     php8.2 php8.2-cli php8.2-common php8.2-curl php8.2-gd \
