@@ -13,7 +13,90 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # ── PR only: build the image and smoke-test the full stack ──
+  build-and-test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build the image with docker compose
+        run: docker compose build
+
+      - name: Start the stack
+        run: docker compose up -d
+
+      - name: Wait for MariaDB to be healthy
+        run: |
+          echo "Waiting for MariaDB health check..."
+          retries=30
+          until [ "$(docker inspect --format='{{.State.Health.Status}}' "$(docker compose ps -q db)")" = "healthy" ]; do
+            retries=$((retries - 1))
+            if [ "$retries" -le 0 ]; then
+              echo "::error::MariaDB did not become healthy"
+              docker compose logs db
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "MariaDB is healthy."
+
+      - name: Wait for FreePBX to start (up to 5 min)
+        run: |
+          echo "Waiting for FreePBX entrypoint to finish..."
+          retries=60
+          until docker compose logs freepbx 2>&1 | grep -q "apache2ctl\|Apache\|AH00558\|FOREGROUND"; do
+            retries=$((retries - 1))
+            if [ "$retries" -le 0 ]; then
+              echo "::error::FreePBX did not start in time"
+              docker compose logs freepbx
+              exit 1
+            fi
+            # Bail early on the known crash
+            if docker compose logs freepbx 2>&1 | grep -q "freepbx_settings.*doesn't exist"; then
+              echo "::error::freepbx_settings table missing — SQL dump is bad"
+              docker compose logs freepbx
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "FreePBX entrypoint completed."
+
+      - name: Smoke test — verify critical DB table exists
+        run: |
+          docker compose exec -T db mariadb -ufreepbx -pchangeme_fpbx asterisk \
+            -e "SELECT COUNT(*) AS setting_count FROM freepbx_settings;" \
+            || { echo "::error::freepbx_settings table is missing"; docker compose logs freepbx; exit 1; }
+
+      - name: Smoke test — HTTP 200 from Apache
+        run: |
+          retries=12
+          until curl -sf -o /dev/null -w '%{http_code}' http://localhost:80; do
+            retries=$((retries - 1))
+            if [ "$retries" -le 0 ]; then
+              echo "::error::Apache did not return HTTP 200"
+              docker compose logs freepbx | tail -40
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "HTTP check passed."
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --tail=100
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  # ── Merge / tag only: build and push to GHCR ──
   build-and-push:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -27,7 +110,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -49,7 +131,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
