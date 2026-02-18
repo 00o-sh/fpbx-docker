@@ -1,77 +1,49 @@
-################################################################################
-# Stage 1: Build Asterisk from source
-################################################################################
-FROM debian:bookworm-slim AS builder
-
-ENV DEBIAN_FRONTEND=noninteractive
-ARG ASTERISK_VERSION=21
-
-WORKDIR /usr/src
-
-# Install build-only dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential pkg-config automake autoconf autoconf-archive \
-    libtool libtool-bin bison flex patch bzip2 xmlstarlet \
-    python-dev-is-python3 curl wget git subversion ca-certificates \
-    libssl-dev libncurses5-dev libnewt-dev libsqlite3-dev \
-    libjansson-dev libxml2-dev libxslt1-dev uuid-dev zlib1g-dev \
-    default-libmysqlclient-dev libasound2-dev libogg-dev \
-    libvorbis-dev libicu-dev libcurl4-openssl-dev libical-dev \
-    libneon27-dev libsrtp2-dev libspandsp-dev libedit-dev \
-    libspeex-dev libspeexdsp-dev liburiparser-dev libcap-dev \
-    libsnmp-dev libldap2-dev libfftw3-dev libsndfile1-dev \
-    libcodec2-dev libunbound-dev libgsm1-dev libpopt-dev \
-    libresample1-dev libc-client2007e-dev libgmime-3.0-dev \
-    liblua5.2-dev libbluetooth-dev libradcli-dev libiksemel-dev \
-    libpq-dev freetds-dev binutils-dev unixodbc-dev \
-  && rm -rf /var/lib/apt/lists/*
-
-# Download, build, and install Asterisk
-RUN set -eux \
-  && curl -fsSL "https://downloads.asterisk.org/pub/telephony/asterisk/asterisk-${ASTERISK_VERSION}-current.tar.gz" -o asterisk.tar.gz \
-  && tar -xzf asterisk.tar.gz && rm asterisk.tar.gz \
-  && cd asterisk-${ASTERISK_VERSION}.*/ \
-  && contrib/scripts/get_mp3_source.sh \
-  && ./configure --libdir=/usr/lib64 --with-pjproject-bundled --with-jansson-bundled \
-  && make menuselect.makeopts \
-  && menuselect/menuselect \
-       --disable BUILD_NATIVE \
-       --enable format_mp3 \
-       menuselect.makeopts \
-  && make -j"$(nproc)" \
-  && make install \
-  && make samples \
-  && ldconfig
-
-################################################################################
-# Stage 2: Runtime image
-################################################################################
 FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
+ARG ASTERISK_VERSION=21
 ARG FREEPBX_VERSION=17
 
-# Install runtime dependencies only (no -dev packages, no build tools)
+# Add Sangoma/FreePBX repository
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends wget gnupg ca-certificates \
+  && wget -qO - http://deb.freepbx.org/gpg/aptly-pubkey.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/freepbx.gpg \
+  && echo "deb [arch=amd64] http://deb.freepbx.org/freepbx${FREEPBX_VERSION}-prod bookworm main" \
+       > /etc/apt/sources.list.d/freepbx.list \
+  && printf 'Package: *\nPin: origin deb.freepbx.org\nPin-Priority: 600\n' \
+       > /etc/apt/preferences.d/freepbx \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install all runtime dependencies + Asterisk + FreePBX deps
 RUN apt-get update \
   && echo "postfix postfix/mailname string freepbx.localdomain" | debconf-set-selections \
   && echo "postfix postfix/main_mailer_type string 'Internet Site'" | debconf-set-selections \
-  && apt-get install -y --no-install-recommends \
-    # Runtime libraries needed by Asterisk
-    curl ca-certificates gnupg \
-    libssl3 libncurses6 libnewt0.52 libsqlite3-0 \
-    libjansson4 libxml2 libxslt1.1 libuuid1 zlib1g \
-    default-mysql-client-core libasound2 libogg0 \
-    libvorbis0a libvorbisenc2 libicu72 libcurl4 libical3 \
-    libneon27-gnutls libsrtp2-1 libspandsp2 libedit2 \
-    libspeex1 libspeexdsp1 liburiparser1 libcap2 \
-    libsnmp40 libldap-2.5-0 libfftw3-single3 libsndfile1 \
-    libcodec2-1.0 libunbound8 libgsm1 libpopt0 \
-    libresample1 libc-client2007e libgmime-3.0-0 \
-    liblua5.2-0 libbluetooth3 libradcli4 libiksemel3 \
-    libpq5 libct4 \
-    unixodbc odbc-mariadb \
+  && apt-get install -y \
+    curl ca-certificates gnupg sudo \
+    # Asterisk from Sangoma repo
+    asterisk${ASTERISK_VERSION} \
+    asterisk${ASTERISK_VERSION}-core \
+    asterisk${ASTERISK_VERSION}-curl \
+    asterisk${ASTERISK_VERSION}-odbc \
+    asterisk${ASTERISK_VERSION}-ogg \
+    asterisk${ASTERISK_VERSION}-flite \
+    asterisk${ASTERISK_VERSION}-resample \
+    asterisk${ASTERISK_VERSION}-snmp \
+    asterisk${ASTERISK_VERSION}-speex \
+    asterisk${ASTERISK_VERSION}-sqlite3 \
+    asterisk${ASTERISK_VERSION}-voicemail \
+    asterisk${ASTERISK_VERSION}-addons \
+    asterisk${ASTERISK_VERSION}-addons-core \
+    asterisk${ASTERISK_VERSION}-addons-mysql \
+    asterisk${ASTERISK_VERSION}-addons-bluetooth \
+    asterisk${ASTERISK_VERSION}-addons-ooh323 \
+    asterisk${ASTERISK_VERSION}-doc \
+    asterisk${ASTERISK_VERSION}-g729 \
+    asterisk${ASTERISK_VERSION}-res-digium-phone \
+    asterisk-version-switch \
+    asterisk-sounds-core-en-ulaw \
     # Utilities
-    sox lame ffmpeg mpg123 sqlite3 uuid expect sudo \
+    sox lame ffmpeg mpg123 sqlite3 uuid expect \
     net-tools sngrep flite at cron \
     # Apache & PHP 8.2
     apache2 \
@@ -80,8 +52,12 @@ RUN apt-get update \
     php8.2-soap php8.2-sqlite3 php8.2-bcmath php8.2-zip \
     php8.2-bz2 php8.2-ldap php8.2-ssh2 php8.2-redis \
     php-pear \
+    # IonCube (required by FreePBX)
+    ioncube-loader-82 \
     # MariaDB client
     mariadb-client \
+    # ODBC + runtime libs not pulled as deps
+    unixodbc odbc-mariadb liburiparser1 \
     # Node.js & npm
     nodejs npm \
     # Redis
@@ -94,55 +70,48 @@ RUN apt-get update \
     logrotate incron \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy Asterisk from builder
-COPY --from=builder /usr/sbin/asterisk /usr/sbin/
-COPY --from=builder /usr/lib64/libasterisk* /usr/lib64/
-COPY --from=builder /usr/lib64/asterisk/ /usr/lib64/asterisk/
-COPY --from=builder /var/lib/asterisk/ /var/lib/asterisk/
-COPY --from=builder /var/spool/asterisk/ /var/spool/asterisk/
-COPY --from=builder /var/log/asterisk/ /var/log/asterisk/
-COPY --from=builder /etc/asterisk/ /etc/asterisk/
-COPY --from=builder /usr/sbin/rasterisk /usr/sbin/
-COPY --from=builder /usr/sbin/astcanary /usr/sbin/
-COPY --from=builder /usr/sbin/astdb2sqlite3 /usr/sbin/
-COPY --from=builder /usr/sbin/astdb2bdb /usr/sbin/
-
-# Create asterisk user, configure services, download FreePBX — single layer
+# Configure asterisk user, Apache, PHP
 RUN set -eux \
-  # Asterisk user
-  && groupadd -r asterisk \
-  && useradd -r -d /var/lib/asterisk -g asterisk asterisk \
+  # Asterisk user (may already exist from package)
+  && (getent group asterisk || groupadd -r asterisk) \
+  && (id asterisk 2>/dev/null || useradd -r -g asterisk -d /home/asterisk -M -s /bin/bash asterisk) \
   && usermod -aG audio,dialout asterisk \
-  && chown -R asterisk:asterisk /etc/asterisk /var/lib/asterisk \
-       /var/log/asterisk /var/spool/asterisk /usr/lib64/asterisk \
-  && echo "/usr/lib64" >> /etc/ld.so.conf.d/x86_64-linux-gnu.conf \
-  && ldconfig \
-  # Asterisk config
-  && sed -i 's|;runuser|runuser|' /etc/asterisk/asterisk.conf \
-  && sed -i 's|;rungroup|rungroup|' /etc/asterisk/asterisk.conf \
+  # Directories
+  && mkdir -p /var/run/asterisk /var/lib/asterisk/moh /var/lib/asterisk/sounds \
+             /var/log/asterisk /var/spool/asterisk /etc/asterisk /tftpboot \
+             /var/lib/php/session \
+  && touch /etc/asterisk/extconfig_custom.conf \
+          /etc/asterisk/extensions_override_freepbx.conf \
+          /etc/asterisk/extensions_additional.conf \
+          /etc/asterisk/extensions_custom.conf \
+  && chown -R asterisk:asterisk /var/run/asterisk /var/lib/asterisk \
+       /var/log/asterisk /var/spool/asterisk /etc/asterisk /tftpboot \
+       /var/www/html /var/lib/php/session \
   # Apache config
+  && a2enmod ssl rewrite expires \
   && sed -i 's/^\(User\|Group\).*/\1 asterisk/' /etc/apache2/apache2.conf \
   && sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf \
   && echo "ServerName localhost" >> /etc/apache2/apache2.conf \
-  && a2enmod rewrite \
+  && sed -i 's/\(^ServerTokens \).*/\1Prod/' /etc/apache2/conf-available/security.conf \
+  && sed -i 's/\(^ServerSignature \).*/\1Off/' /etc/apache2/conf-available/security.conf \
   && rm -f /var/www/html/index.html \
   # PHP config
   && sed -i 's/\(^upload_max_filesize = \).*/\120M/' /etc/php/8.2/apache2/php.ini \
   && sed -i 's/\(^memory_limit = \).*/\1256M/' /etc/php/8.2/apache2/php.ini \
-  && (grep -q '^max_input_vars' /etc/php/8.2/apache2/php.ini \
-      && sed -i 's/\(^max_input_vars = \).*/\110000/' /etc/php/8.2/apache2/php.ini \
-      || sed -i 's/;.*max_input_vars.*/max_input_vars = 10000/' /etc/php/8.2/apache2/php.ini) \
-  # Download FreePBX
-  && curl -fsSL "https://mirror.freepbx.org/modules/packages/freepbx/freepbx-${FREEPBX_VERSION}.0-latest.tgz" \
-       -o /usr/local/src/freepbx.tgz \
-  && tar -xzf /usr/local/src/freepbx.tgz -C /usr/local/src \
-  && rm /usr/local/src/freepbx.tgz \
-  # Log directory
-  && mkdir -p /var/log/asterisk \
-  && touch /var/log/asterisk/full \
-  && chown -R asterisk:asterisk /var/log/asterisk
+  && sed -i 's/\(^expose_php = \).*/\1Off/' /etc/php/8.2/apache2/php.ini \
+  && sed -i 's/;max_input_vars = 1000/max_input_vars = 2000/' /etc/php/8.2/apache2/php.ini \
+  && sed -i 's/;pcre.jit=1/pcre.jit=0/' /etc/php/8.2/apache2/php.ini \
+  # OpenSSL compat
+  && sed -i 's/^openssl_conf = openssl_init$/openssl_conf = default_conf/' /etc/ssl/openssl.cnf \
+  && printf '\n[ default_conf ]\nssl_conf = ssl_sect\n[ssl_sect]\nsystem_default = system_default_sect\n[system_default_sect]\nMinProtocol = TLSv1.2\nCipherString = DEFAULT:@SECLEVEL=1\n' \
+       >> /etc/ssl/openssl.cnf
 
-# Copy configs and entrypoint — single layer
+# Install FreePBX at build time using a temp MariaDB
+COPY build-freepbx.sh /usr/local/src/build-freepbx.sh
+RUN chmod +x /usr/local/src/build-freepbx.sh \
+  && /usr/local/src/build-freepbx.sh "${FREEPBX_VERSION}"
+
+# Copy configs and entrypoint
 COPY config/odbc/odbcinst.ini /etc/odbcinst.ini
 COPY config/odbc/odbc.ini /etc/odbc.ini
 COPY config/fail2ban/jail.local /etc/fail2ban/jail.local

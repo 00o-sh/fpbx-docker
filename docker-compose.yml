@@ -20,6 +20,7 @@ services:
       start_period: 30s
 
   freepbx:
+    build: .
     image: ghcr.io/00o-sh/fpbx-docker:latest
     restart: unless-stopped
     depends_on:
