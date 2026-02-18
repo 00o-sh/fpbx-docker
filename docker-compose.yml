@@ -19,7 +19,8 @@ services:
       retries: 10
 
   freepbx:
-    image: ghcr.io/00o-sh/freepbx:17
+    build: .
+    image: freepbx:17
     restart: unless-stopped
     depends_on:
       db:
