@@ -56,8 +56,8 @@ RUN apt-get update \
     ioncube-loader-82 \
     # MariaDB client
     mariadb-client \
-    # ODBC
-    unixodbc odbc-mariadb \
+    # ODBC + runtime libs not pulled as deps
+    unixodbc odbc-mariadb liburiparser1 \
     # Node.js & npm
     nodejs npm \
     # Redis
