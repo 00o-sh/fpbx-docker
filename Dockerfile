@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential pkg-config automake autoconf libtool libtool-bin \
     bison flex \
     # General utilities
-    curl wget git ca-certificates gnupg lsb-release cron \
+    curl wget git subversion ca-certificates gnupg lsb-release cron \
     sox lame ffmpeg mpg123 sqlite3 uuid expect unixodbc \
     # Libraries for Asterisk
     libssl-dev libncurses5-dev libnewt-dev libsqlite3-dev \
