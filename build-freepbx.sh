@@ -119,11 +119,34 @@ if ! mariadb -e "SELECT 1" &>/dev/null; then
   echo ">>> MariaDB restarted (PID $MYSQL_PID)."
 fi
 
+# Restart Asterisk if the package install killed it
+if ! /usr/sbin/asterisk -rx "core show version" &>/dev/null; then
+  echo ">>> Asterisk died during package install — restarting..."
+  /usr/sbin/asterisk -U asterisk -G asterisk -C /etc/asterisk/asterisk.conf
+  retries=30
+  until /usr/sbin/asterisk -rx "core show version" &>/dev/null; do
+    retries=$((retries - 1))
+    if [ "$retries" -le 0 ]; then
+      echo "ERROR: Asterisk failed to restart after package install" >&2
+      exit 1
+    fi
+    sleep 2
+  done
+  echo ">>> Asterisk restarted."
+fi
+
+# Post-install module setup (matches official sng_freepbx_debian_install.sh)
 echo ">>> Running fwconsole post-install..."
+fwconsole ma install pms || true
+fwconsole ma enable pms || true
+fwconsole ma install recordings || true
+fwconsole ma enable recordings || true
 fwconsole ma installlocal || true
 fwconsole ma upgradeall || true
 fwconsole reload || true
+fwconsole restart || true
 fwconsole chown || true
+fwconsole ma refreshsignatures || true
 
 echo ">>> FreePBX install phase complete"
 
