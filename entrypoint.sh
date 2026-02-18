@@ -8,7 +8,6 @@ DB_PASS="${DB_PASS:-freepbx}"
 DB_NAME="${DB_NAME:-asterisk}"
 DB_CDR_NAME="${DB_CDR_NAME:-asteriskcdrdb}"
 
-FREEPBX_DIR="/usr/local/src/freepbx"
 INSTALLED_MARKER="/var/lib/asterisk/.fpbx_installed"
 
 # ---------------------------------------------------------------
@@ -29,59 +28,34 @@ wait_for_db() {
 }
 
 # ---------------------------------------------------------------
-# First-run FreePBX installation
+# First-run: import pre-built schema and update DB connection
 # ---------------------------------------------------------------
-install_freepbx() {
-  echo "=== First-run FreePBX installation ==="
+init_db() {
+  echo "=== First-run: importing FreePBX database schema ==="
 
-  # Ensure run directory exists for Asterisk socket/PID
-  mkdir -p /var/run/asterisk
-  chown asterisk:asterisk /var/run/asterisk
+  # Import the pre-built SQL dumps
+  mariadb -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < /usr/local/src/asterisk.sql
+  mariadb -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_CDR_NAME" < /usr/local/src/asteriskcdrdb.sql
 
-  # Start Asterisk temporarily for the installer
-  /usr/sbin/asterisk -U asterisk -G asterisk -f &
-  local ast_pid=$!
-
-  # Wait for Asterisk to be fully booted
-  echo "Waiting for Asterisk to start..."
-  local retries=30
-  while ! /usr/sbin/asterisk -rx "core show version" &>/dev/null; do
-    retries=$((retries - 1))
-    if [ "$retries" -le 0 ]; then
-      echo "ERROR: Asterisk did not start in time." >&2
-      exit 1
-    fi
-    sleep 2
-  done
-  echo "Asterisk is running."
-
-  cd "$FREEPBX_DIR"
-  ./install -n \
-    --dbhost "$DB_HOST" \
-    --dbuser "$DB_USER" \
-    --dbpass "$DB_PASS" \
-    --dbname "$DB_NAME" \
-    --cdrdbname "$DB_CDR_NAME" \
-    --webroot /var/www/html
-
-  # Install base modules
-  fwconsole ma installall
-  fwconsole reload
-  fwconsole chown
-
-  # Stop the temporary Asterisk - entrypoint will start it properly via fwconsole
-  /usr/sbin/asterisk -rx "core stop now" 2>/dev/null || true
-  wait "$ast_pid" 2>/dev/null || true
-  sleep 2
+  # Update FreePBX config to point to the external DB
+  if [ -f /etc/freepbx.conf ]; then
+    sed -i "s/\$amp_conf\['AMPDBHOST'\] = .*/\$amp_conf['AMPDBHOST'] = '${DB_HOST}';/" /etc/freepbx.conf
+    sed -i "s/\$amp_conf\['AMPDBUSER'\] = .*/\$amp_conf['AMPDBUSER'] = '${DB_USER}';/" /etc/freepbx.conf
+    sed -i "s/\$amp_conf\['AMPDBPASS'\] = .*/\$amp_conf['AMPDBPASS'] = '${DB_PASS}';/" /etc/freepbx.conf
+  fi
 
   touch "$INSTALLED_MARKER"
-  echo "=== FreePBX installation complete ==="
+  echo "=== Database import complete ==="
 }
 
 # ---------------------------------------------------------------
 # Start services
 # ---------------------------------------------------------------
 start_services() {
+  # Ensure run directory exists
+  mkdir -p /var/run/asterisk
+  chown asterisk:asterisk /var/run/asterisk
+
   # Start cron (for scheduled tasks & logrotate)
   /usr/sbin/cron &
 
@@ -108,7 +82,7 @@ start_services() {
 wait_for_db
 
 if [ ! -f "$INSTALLED_MARKER" ]; then
-  install_freepbx
+  init_db
 fi
 
 # Ensure ownership is correct on mounted volumes

@@ -44,7 +44,7 @@ RUN set -eux \
   && ldconfig
 
 ################################################################################
-# Stage 2: Runtime image
+# Stage 2: Runtime image with FreePBX installed at build time
 ################################################################################
 FROM debian:bookworm-slim
 
@@ -80,8 +80,8 @@ RUN apt-get update \
     php8.2-soap php8.2-sqlite3 php8.2-bcmath php8.2-zip \
     php8.2-bz2 php8.2-ldap php8.2-ssh2 php8.2-redis \
     php-pear \
-    # MariaDB client
-    mariadb-client \
+    # MariaDB (server for build-time install, client for runtime)
+    mariadb-server mariadb-client \
     # Node.js & npm
     nodejs npm \
     # Redis
@@ -107,7 +107,7 @@ COPY --from=builder /usr/sbin/astcanary /usr/sbin/
 COPY --from=builder /usr/sbin/astdb2sqlite3 /usr/sbin/
 COPY --from=builder /usr/sbin/astdb2bdb /usr/sbin/
 
-# Create asterisk user, configure services, download FreePBX — single layer
+# Create asterisk user, configure services, install FreePBX with temp DB
 RUN set -eux \
   # Asterisk user
   && groupadd -r asterisk \
@@ -132,17 +132,54 @@ RUN set -eux \
   && (grep -q '^max_input_vars' /etc/php/8.2/apache2/php.ini \
       && sed -i 's/\(^max_input_vars = \).*/\110000/' /etc/php/8.2/apache2/php.ini \
       || sed -i 's/;.*max_input_vars.*/max_input_vars = 10000/' /etc/php/8.2/apache2/php.ini) \
-  # Download FreePBX
+  # Directories
+  && mkdir -p /var/run/asterisk /var/log/asterisk \
+  && chown asterisk:asterisk /var/run/asterisk \
+  && touch /var/log/asterisk/full \
+  && chown -R asterisk:asterisk /var/log/asterisk \
+  # --- Start temp MariaDB and install FreePBX at build time ---
+  && mkdir -p /var/run/mysqld && chown mysql:mysql /var/run/mysqld \
+  && mysqld --user=mysql --datadir=/var/lib/mysql &  \
+  && sleep 5 \
+  && mariadb -e "CREATE DATABASE asterisk;" \
+  && mariadb -e "CREATE DATABASE asteriskcdrdb;" \
+  && mariadb -e "CREATE USER 'freepbx'@'localhost' IDENTIFIED BY 'freepbx';" \
+  && mariadb -e "GRANT ALL ON asterisk.* TO 'freepbx'@'localhost';" \
+  && mariadb -e "GRANT ALL ON asteriskcdrdb.* TO 'freepbx'@'localhost';" \
+  && mariadb -e "FLUSH PRIVILEGES;" \
+  # Start Asterisk for the installer
+  && /usr/sbin/asterisk -U asterisk -G asterisk \
+  && sleep 3 \
+  # Download & install FreePBX
   && curl -fsSL "https://mirror.freepbx.org/modules/packages/freepbx/freepbx-${FREEPBX_VERSION}.0-latest.tgz" \
        -o /usr/local/src/freepbx.tgz \
   && tar -xzf /usr/local/src/freepbx.tgz -C /usr/local/src \
   && rm /usr/local/src/freepbx.tgz \
-  # Log directory
-  && mkdir -p /var/log/asterisk \
-  && touch /var/log/asterisk/full \
-  && chown -R asterisk:asterisk /var/log/asterisk
+  && cd /usr/local/src/freepbx \
+  && ./install -n \
+       --dbhost localhost \
+       --dbuser freepbx \
+       --dbpass freepbx \
+       --dbname asterisk \
+       --cdrdbname asteriskcdrdb \
+       --webroot /var/www/html \
+  && fwconsole ma installall \
+  && fwconsole reload \
+  && fwconsole chown \
+  # Dump the schema so entrypoint can import into external DB
+  && mariadb-dump asterisk > /usr/local/src/asterisk.sql \
+  && mariadb-dump asteriskcdrdb > /usr/local/src/asteriskcdrdb.sql \
+  # Stop Asterisk and MariaDB
+  && /usr/sbin/asterisk -rx "core stop now" 2>/dev/null || true \
+  && mysqladmin shutdown 2>/dev/null || true \
+  && sleep 2 \
+  # Remove MariaDB server (no longer needed at runtime)
+  && apt-get purge -y mariadb-server \
+  && apt-get autoremove -y \
+  && rm -rf /var/lib/mysql /var/run/mysqld \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy configs and entrypoint — single layer
+# Copy configs and entrypoint
 COPY config/odbc/odbcinst.ini /etc/odbcinst.ini
 COPY config/odbc/odbc.ini /etc/odbc.ini
 COPY config/fail2ban/jail.local /etc/fail2ban/jail.local
