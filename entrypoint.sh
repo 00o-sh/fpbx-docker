@@ -66,6 +66,9 @@ start_services() {
   # Start cron (for scheduled tasks & logrotate)
   /usr/sbin/cron &
 
+  # Start Redis (used by FreePBX for sessions/cache)
+  redis-server --daemonize yes
+
   # Start postfix (mail)
   service postfix start 2>/dev/null || true
 

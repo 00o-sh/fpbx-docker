@@ -10,34 +10,45 @@ WORKDIR /usr/src
 # Install base dependencies and PHP 8.2
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build tools
-    build-essential pkg-config automake autoconf libtool libtool-bin \
-    bison flex \
+    build-essential pkg-config automake autoconf autoconf-archive \
+    libtool libtool-bin bison flex patch bzip2 xmlstarlet \
+    python-dev-is-python3 \
     # General utilities
     curl wget git subversion ca-certificates gnupg lsb-release cron \
-    sox lame ffmpeg mpg123 sqlite3 uuid expect unixodbc \
+    sox lame ffmpeg mpg123 sqlite3 uuid expect unixodbc sudo \
+    net-tools sngrep flite ghostscript libtiff-tools at \
     # Libraries for Asterisk
     libssl-dev libncurses5-dev libnewt-dev libsqlite3-dev \
-    libjansson-dev libxml2-dev libxslt1-dev uuid-dev \
+    libjansson-dev libxml2-dev libxslt1-dev uuid-dev zlib1g-dev \
     default-libmysqlclient-dev libasound2-dev libogg-dev \
     libvorbis-dev libicu-dev libcurl4-openssl-dev libical-dev \
     libneon27-dev libsrtp2-dev libspandsp-dev libedit-dev \
+    libspeex-dev libspeexdsp-dev liburiparser-dev libcap-dev \
+    libsnmp-dev libldap2-dev libfftw3-dev libsndfile1-dev \
+    libcodec2-dev libunbound-dev libgsm1-dev libpopt-dev \
+    libresample1-dev libc-client2007e-dev libgmime-3.0-dev \
+    liblua5.2-dev libbluetooth-dev libradcli-dev libiksemel-dev \
+    libpq-dev freetds-dev binutils-dev \
     unixodbc-dev odbc-mariadb \
     # Apache & PHP 8.2
     apache2 \
     php8.2 php8.2-cli php8.2-common php8.2-curl php8.2-gd \
     php8.2-mbstring php8.2-mysql php8.2-xml php8.2-intl \
     php8.2-soap php8.2-sqlite3 php8.2-bcmath php8.2-zip \
+    php8.2-bz2 php8.2-ldap php8.2-ssh2 php8.2-redis \
     php-pear \
     # MariaDB client
     mariadb-client \
     # Node.js & npm
     nodejs npm \
+    # Redis (used by FreePBX for session/cache)
+    redis-server \
     # Security
     ipset iptables fail2ban \
     # Mail
     postfix libsasl2-modules mailutils \
     # Misc
-    logrotate certbot python3-certbot-apache \
+    logrotate certbot python3-certbot-apache incron \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Download and build Asterisk
