@@ -107,14 +107,20 @@ fwconsole chown || true
 
 echo ">>> FreePBX install phase complete"
 
-# --- From here on, don't let errors stop the build ---
-set +e
-
-# Dump schemas for runtime import to external DB
+# Dump schemas for runtime import to external DB (still under set -e)
 echo ">>> Dumping database schemas..."
 mariadb-dump asterisk > /usr/local/src/asterisk.sql
 mariadb-dump asteriskcdrdb > /usr/local/src/asteriskcdrdb.sql
-echo ">>> Schema dump complete"
+
+# Validate the dumps contain the critical table
+if ! grep -q 'freepbx_settings' /usr/local/src/asterisk.sql; then
+  echo "ERROR: asterisk.sql dump is missing freepbx_settings table — FreePBX install likely failed" >&2
+  exit 1
+fi
+echo ">>> Schema dump complete (validated)"
+
+# --- From here on, don't let errors stop the build ---
+set +e
 
 # Stop Asterisk and MariaDB
 echo ">>> Stopping services..."

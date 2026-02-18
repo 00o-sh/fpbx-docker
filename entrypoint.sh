@@ -75,6 +75,13 @@ init_db() {
   mariadb -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < /usr/local/src/asterisk.sql
   mariadb -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_CDR_NAME" < /usr/local/src/asteriskcdrdb.sql
 
+  # Verify the import created the critical table before marking as installed
+  if ! mariadb -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+       -e "SELECT 1 FROM freepbx_settings LIMIT 1" &>/dev/null; then
+    echo "ERROR: freepbx_settings table missing after import — SQL dumps may be incomplete" >&2
+    exit 1
+  fi
+
   touch "$INSTALLED_MARKER"
   echo "=== Database import complete ==="
 }
@@ -96,12 +103,14 @@ start_services() {
   # Start postfix (mail)
   service postfix start 2>/dev/null || true
 
-  # Start Fail2ban
-  rm -f /var/run/fail2ban/fail2ban.pid /var/run/fail2ban/fail2ban.sock
-  fail2ban-client start &
-
   # Start Asterisk via FreePBX
   fwconsole start
+
+  # Start Fail2ban (after Asterisk so log files exist)
+  mkdir -p /var/log/asterisk
+  touch /var/log/asterisk/full
+  rm -f /var/run/fail2ban/fail2ban.pid /var/run/fail2ban/fail2ban.sock
+  fail2ban-client start &
 
   # Start Apache in foreground (keeps container running)
   exec apache2ctl -D FOREGROUND
