@@ -19,10 +19,7 @@ services:
       retries: 10
 
   freepbx:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ghcr.io/${GHCR_OWNER:-local}/freepbx:17
+    image: ghcr.io/${GHCR_OWNER}/freepbx:17
     restart: unless-stopped
     depends_on:
       db:
