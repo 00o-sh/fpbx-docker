@@ -112,8 +112,8 @@ RUN chmod +x /usr/local/src/build-freepbx.sh \
   && /usr/local/src/build-freepbx.sh "${FREEPBX_VERSION}"
 
 # Copy configs and entrypoint
+# Note: odbc.ini is generated at runtime by entrypoint.sh from env vars
 COPY config/odbc/odbcinst.ini /etc/odbcinst.ini
-COPY config/odbc/odbc.ini /etc/odbc.ini
 COPY config/fail2ban/jail.local /etc/fail2ban/jail.local
 COPY config/fail2ban/asterisk.conf /etc/fail2ban/filter.d/asterisk.conf
 COPY config/logrotate/asterisk /etc/logrotate.d/asterisk
