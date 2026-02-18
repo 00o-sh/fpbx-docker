@@ -99,6 +99,26 @@ apt-get install -y --no-install-recommends \
   freepbx${FREEPBX_VERSION}
 rm -rf /var/lib/apt/lists/*
 
+# The freepbx17 postinst shuts down MariaDB and then tries
+# "systemctl restart mariadb" which doesn't exist in Docker.
+# Restart it manually so fwconsole and mariadb-dump work.
+if ! mariadb -e "SELECT 1" &>/dev/null; then
+  echo ">>> MariaDB died during package install — restarting..."
+  mkdir -p /var/run/mysqld && chown mysql:mysql /var/run/mysqld
+  mysqld --user=mysql --datadir=/var/lib/mysql &
+  MYSQL_PID=$!
+  retries=30
+  until mariadb -e "SELECT 1" &>/dev/null; do
+    retries=$((retries - 1))
+    if [ "$retries" -le 0 ]; then
+      echo "ERROR: MariaDB failed to restart after package install" >&2
+      exit 1
+    fi
+    sleep 2
+  done
+  echo ">>> MariaDB restarted (PID $MYSQL_PID)."
+fi
+
 echo ">>> Running fwconsole post-install..."
 fwconsole ma installlocal || true
 fwconsole ma upgradeall || true
@@ -107,14 +127,23 @@ fwconsole chown || true
 
 echo ">>> FreePBX install phase complete"
 
-# --- From here on, don't let errors stop the build ---
-set +e
-
-# Dump schemas for runtime import to external DB
+# Dump schemas for runtime import to external DB (still under set -e).
+# After dumping, strip DEFINER clauses from triggers/views/routines so
+# the runtime user can import without SUPER privilege.
 echo ">>> Dumping database schemas..."
 mariadb-dump asterisk > /usr/local/src/asterisk.sql
 mariadb-dump asteriskcdrdb > /usr/local/src/asteriskcdrdb.sql
-echo ">>> Schema dump complete"
+sed -i 's/\sDEFINER=[^ ]*//' /usr/local/src/asterisk.sql /usr/local/src/asteriskcdrdb.sql
+
+# Validate the dumps contain the critical table
+if ! grep -q 'freepbx_settings' /usr/local/src/asterisk.sql; then
+  echo "ERROR: asterisk.sql dump is missing freepbx_settings table — FreePBX install likely failed" >&2
+  exit 1
+fi
+echo ">>> Schema dump complete (validated)"
+
+# --- From here on, don't let errors stop the build ---
+set +e
 
 # Stop Asterisk and MariaDB
 echo ">>> Stopping services..."
