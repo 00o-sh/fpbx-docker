@@ -3,23 +3,23 @@ services:
     image: mariadb:10.11
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_ROOT_PASSWORD: changeme_root
       MYSQL_DATABASE: asterisk
-      MYSQL_USER: ${DB_USER:-freepbx}
-      MYSQL_PASSWORD: ${DB_PASS:-freepbx}
+      MYSQL_USER: freepbx
+      MYSQL_PASSWORD: changeme_fpbx
     volumes:
       - db_data:/var/lib/mysql
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - fpbx
     healthcheck:
-      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-u", "root", "-pchangeme_root"]
       interval: 10s
       timeout: 5s
       retries: 10
 
   freepbx:
-    image: ghcr.io/${GHCR_OWNER}/freepbx:17
+    image: ghcr.io/00o-sh/freepbx:17
     restart: unless-stopped
     depends_on:
       db:
@@ -27,8 +27,8 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 3306
-      DB_USER: ${DB_USER:-freepbx}
-      DB_PASS: ${DB_PASS:-freepbx}
+      DB_USER: freepbx
+      DB_PASS: changeme_fpbx
       DB_NAME: asterisk
       DB_CDR_NAME: asteriskcdrdb
     ports:
@@ -39,8 +39,6 @@ services:
       - "5061:5061/tcp"
       - "8001:8001"
       - "8003:8003"
-      # RTP media ports — for production, consider host networking
-      # or manual iptables rules instead of mapping a large range.
       - "10000-10100:10000-10100/udp"
     volumes:
       - asterisk_etc:/etc/asterisk
