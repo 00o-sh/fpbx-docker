@@ -68,7 +68,7 @@ RUN apt-get update \
     libcodec2-1.0 libunbound8 libgsm1 libpopt0 \
     libresample1 libc-client2007e libgmime-3.0-0 \
     liblua5.2-0 libbluetooth3 libradcli4 libiksemel3 \
-    libpq5 libct4 libbfd-2.40-2 \
+    libpq5 libct4 \
     unixodbc odbc-mariadb \
     # Utilities
     sox lame ffmpeg mpg123 sqlite3 uuid expect sudo \
