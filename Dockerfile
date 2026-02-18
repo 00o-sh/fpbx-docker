@@ -87,9 +87,10 @@ RUN set -eux \
   && chown -R asterisk:asterisk /var/run/asterisk /var/lib/asterisk \
        /var/log/asterisk /var/spool/asterisk /etc/asterisk /tftpboot \
        /var/www/html /var/lib/php/session \
-  # Apache config
+  # Apache config (matches official sng_freepbx_debian_install.sh)
   && a2enmod ssl rewrite expires \
-  && sed -i 's/^\(User\|Group\).*/\1 asterisk/' /etc/apache2/apache2.conf \
+  && sed -i 's/\(APACHE_RUN_USER=\)\(.*\)/\1asterisk/' /etc/apache2/envvars \
+  && sed -i 's/\(APACHE_RUN_GROUP=\)\(.*\)/\1asterisk/' /etc/apache2/envvars \
   && sed -i 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf \
   && echo "ServerName localhost" >> /etc/apache2/apache2.conf \
   && sed -i 's/\(^ServerTokens \).*/\1Prod/' /etc/apache2/conf-available/security.conf \
@@ -101,6 +102,8 @@ RUN set -eux \
   && sed -i 's/\(^expose_php = \).*/\1Off/' /etc/php/8.2/apache2/php.ini \
   && sed -i 's/;max_input_vars = 1000/max_input_vars = 2000/' /etc/php/8.2/apache2/php.ini \
   && sed -i 's/;pcre.jit=1/pcre.jit=0/' /etc/php/8.2/apache2/php.ini \
+  # IPv4 precedence (matches official script)
+  && sed -i 's/^#\s*precedence ::ffff:0:0\/96  100/precedence ::ffff:0:0\/96  100/' /etc/gai.conf \
   # OpenSSL compat
   && sed -i 's/^openssl_conf = openssl_init$/openssl_conf = default_conf/' /etc/ssl/openssl.cnf \
   && printf '\n[ default_conf ]\nssl_conf = ssl_sect\n[ssl_sect]\nsystem_default = system_default_sect\n[system_default_sect]\nMinProtocol = TLSv1.2\nCipherString = DEFAULT:@SECLEVEL=1\n' \
@@ -111,7 +114,7 @@ COPY build-freepbx.sh /usr/local/src/build-freepbx.sh
 RUN chmod +x /usr/local/src/build-freepbx.sh \
   && /usr/local/src/build-freepbx.sh "${FREEPBX_VERSION}"
 
-# Enable FreePBX Apache site (installed by the package) and drop the default
+# Enable FreePBX Apache/PHP config (matches official sng_freepbx_debian_install.sh)
 RUN a2dissite 000-default 2>/dev/null || true \
   && if [ -f /etc/apache2/sites-available/freepbx.conf ]; then \
        a2ensite freepbx; \
@@ -119,7 +122,10 @@ RUN a2dissite 000-default 2>/dev/null || true \
        printf '<VirtualHost *:80>\n  DocumentRoot /var/www/html\n  <Directory /var/www/html>\n    AllowOverride All\n    Require all granted\n  </Directory>\n</VirtualHost>\n' \
          > /etc/apache2/sites-available/freepbx.conf \
        && a2ensite freepbx; \
-     fi
+     fi \
+  && a2ensite default-ssl 2>/dev/null || true \
+  && phpenmod freepbx 2>/dev/null || true \
+  && chown -R asterisk:asterisk /var/www/html
 
 # Copy configs and entrypoint
 # Note: odbc.ini is generated at runtime by entrypoint.sh from env vars
