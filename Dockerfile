@@ -48,7 +48,6 @@ RUN set -eux \
   && rm asterisk.tar.gz \
   && cd asterisk-${ASTERISK_VERSION}.*/ \
   && contrib/scripts/get_mp3_source.sh \
-  && contrib/scripts/install_prereq install \
   && ./configure --libdir=/usr/lib64 --with-pjproject-bundled --with-jansson-bundled \
   && make menuselect.makeopts \
   && menuselect/menuselect \
