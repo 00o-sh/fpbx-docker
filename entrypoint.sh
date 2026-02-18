@@ -11,6 +11,44 @@ DB_CDR_NAME="${DB_CDR_NAME:-asteriskcdrdb}"
 INSTALLED_MARKER="/var/lib/asterisk/.fpbx_installed"
 
 # ---------------------------------------------------------------
+# Rewrite FreePBX & ODBC configs to point at the external DB
+# (runs every start so a container recreate never stales)
+# ---------------------------------------------------------------
+configure_db() {
+  # /etc/freepbx.conf – authoritative DB connection for FreePBX
+  cat > /etc/freepbx.conf <<FPBXEOF
+<?php
+\$amp_conf['AMPDBUSER'] = '${DB_USER}';
+\$amp_conf['AMPDBPASS'] = '${DB_PASS}';
+\$amp_conf['AMPDBHOST'] = '${DB_HOST}';
+\$amp_conf['AMPDBPORT'] = '${DB_PORT}';
+\$amp_conf['AMPDBNAME'] = '${DB_NAME}';
+\$amp_conf['AMPDBENGINE'] = 'mysql';
+\$amp_conf['datasource'] = '';
+\$amp_conf['CDRDBNAME'] = '${DB_CDR_NAME}';
+\$amp_conf['CDRDBHOST'] = '${DB_HOST}';
+\$amp_conf['CDRDBPORT'] = '${DB_PORT}';
+\$amp_conf['CDRDBUSER'] = '${DB_USER}';
+\$amp_conf['CDRDBPASS'] = '${DB_PASS}';
+\$amp_conf['CDRDBTYPE'] = 'mysql';
+require_once('/var/www/html/admin/bootstrap.php');
+FPBXEOF
+
+  # /etc/odbc.ini – used by Asterisk's ODBC CDR/CEL
+  cat > /etc/odbc.ini <<ODBCEOF
+[MySQL-asteriskcdrdb]
+Description = MySQL connection to '${DB_CDR_NAME}' database
+Driver      = MySQL
+Server      = ${DB_HOST}
+Database    = ${DB_CDR_NAME}
+Port        = ${DB_PORT}
+Option      = 3
+ODBCEOF
+
+  echo "DB configs written (host=${DB_HOST}, port=${DB_PORT})."
+}
+
+# ---------------------------------------------------------------
 # Wait for MariaDB to become available
 # ---------------------------------------------------------------
 wait_for_db() {
@@ -36,13 +74,6 @@ init_db() {
   # Import the pre-built SQL dumps
   mariadb -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < /usr/local/src/asterisk.sql
   mariadb -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_CDR_NAME" < /usr/local/src/asteriskcdrdb.sql
-
-  # Update FreePBX config to point to the external DB
-  if [ -f /etc/freepbx.conf ]; then
-    sed -i "s/\$amp_conf\['AMPDBHOST'\] = .*/\$amp_conf['AMPDBHOST'] = '${DB_HOST}';/" /etc/freepbx.conf
-    sed -i "s/\$amp_conf\['AMPDBUSER'\] = .*/\$amp_conf['AMPDBUSER'] = '${DB_USER}';/" /etc/freepbx.conf
-    sed -i "s/\$amp_conf\['AMPDBPASS'\] = .*/\$amp_conf['AMPDBPASS'] = '${DB_PASS}';/" /etc/freepbx.conf
-  fi
 
   touch "$INSTALLED_MARKER"
   echo "=== Database import complete ==="
@@ -80,6 +111,7 @@ start_services() {
 # Main
 # ---------------------------------------------------------------
 wait_for_db
+configure_db
 
 if [ ! -f "$INSTALLED_MARKER" ]; then
   init_db
