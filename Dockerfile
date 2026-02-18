@@ -18,7 +18,7 @@ RUN apt-get update \
 RUN apt-get update \
   && echo "postfix postfix/mailname string freepbx.localdomain" | debconf-set-selections \
   && echo "postfix postfix/main_mailer_type string 'Internet Site'" | debconf-set-selections \
-  && apt-get install -y --no-install-recommends \
+  && apt-get install -y \
     curl ca-certificates gnupg sudo \
     # Asterisk from Sangoma repo
     asterisk${ASTERISK_VERSION} \
