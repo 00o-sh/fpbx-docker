@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjansson-dev libxml2-dev libxslt1-dev uuid-dev \
     default-libmysqlclient-dev libasound2-dev libogg-dev \
     libvorbis-dev libicu-dev libcurl4-openssl-dev libical-dev \
-    libneon27-dev libsrtp2-dev libspandsp-dev \
+    libneon27-dev libsrtp2-dev libspandsp-dev libedit-dev \
     unixodbc-dev odbc-mariadb \
     # Apache & PHP 8.2
     apache2 \
