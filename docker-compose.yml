@@ -1,12 +1,19 @@
+x-db-config:
+  user: &db-user freepbx
+  pass: &db-pass changeme_fpbx
+  name: &db-name asterisk
+  cdr-name: &db-cdr-name asteriskcdrdb
+  root-pass: &db-root-pass changeme_root
+
 services:
   db:
     image: mariadb:10.11
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: changeme_root
-      MYSQL_DATABASE: asterisk
-      MYSQL_USER: freepbx
-      MYSQL_PASSWORD: changeme_fpbx
+      MYSQL_ROOT_PASSWORD: *db-root-pass
+      MYSQL_DATABASE: *db-name
+      MYSQL_USER: *db-user
+      MYSQL_PASSWORD: *db-pass
     volumes:
       - db_data:/var/lib/mysql
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -28,11 +35,11 @@ services:
         condition: service_healthy
     environment:
       DB_HOST: db
-      DB_PORT: 3306
-      DB_USER: freepbx
-      DB_PASS: changeme_fpbx
-      DB_NAME: asterisk
-      DB_CDR_NAME: asteriskcdrdb
+      DB_PORT: "3306"
+      DB_USER: *db-user
+      DB_PASS: *db-pass
+      DB_NAME: *db-name
+      DB_CDR_NAME: *db-cdr-name
     ports:
       - "80:80"
       - "443:443"
