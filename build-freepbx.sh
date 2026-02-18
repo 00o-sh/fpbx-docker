@@ -68,23 +68,33 @@ cd /usr/local/src/freepbx
   --webroot /var/www/html
 
 fwconsole ma installall
-fwconsole reload
-fwconsole chown
+fwconsole reload || true
+fwconsole chown || true
 
-# --- Dump schemas for runtime import ---
+echo ">>> FreePBX install phase complete"
+
+# --- From here on, don't let errors stop the build ---
+set +e
+
+# Dump schemas for runtime import
+echo ">>> Dumping database schemas..."
 mariadb-dump asterisk > /usr/local/src/asterisk.sql
 mariadb-dump asteriskcdrdb > /usr/local/src/asteriskcdrdb.sql
+echo ">>> Schema dump complete"
 
-# --- Cleanup ---
-/usr/sbin/asterisk -rx "core stop now" 2>/dev/null || true
+# Stop Asterisk and MariaDB
+echo ">>> Stopping services..."
+/usr/sbin/asterisk -rx "core stop now" 2>/dev/null
 sleep 2
-kill "$MYSQL_PID" 2>/dev/null || true
-wait "$MYSQL_PID" 2>/dev/null || true
+kill "$MYSQL_PID" 2>/dev/null
+wait "$MYSQL_PID" 2>/dev/null
 
-# Remove MariaDB server (bypass maintainer scripts that fail in Docker)
-dpkg --purge --force-remove-reinstreq --force-depends mariadb-server mariadb-server-10.11 mariadb-server-core-10.11 2>/dev/null || true
+# Remove MariaDB server
+echo ">>> Removing MariaDB server..."
+dpkg --purge --force-remove-reinstreq --force-depends \
+  mariadb-server mariadb-server-10.11 mariadb-server-core-10.11 2>/dev/null
 rm -rf /var/lib/mysql /var/run/mysqld /etc/mysql
-apt-get autoremove -y 2>/dev/null || true
+apt-get autoremove -y 2>/dev/null
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
