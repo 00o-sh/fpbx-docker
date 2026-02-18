@@ -34,8 +34,26 @@ wait_for_db() {
 install_freepbx() {
   echo "=== First-run FreePBX installation ==="
 
+  # Ensure run directory exists for Asterisk socket/PID
+  mkdir -p /var/run/asterisk
+  chown asterisk:asterisk /var/run/asterisk
+
   # Start Asterisk temporarily for the installer
-  /usr/sbin/asterisk -U asterisk -G asterisk
+  /usr/sbin/asterisk -U asterisk -G asterisk -f &
+  local ast_pid=$!
+
+  # Wait for Asterisk to be fully booted
+  echo "Waiting for Asterisk to start..."
+  local retries=30
+  while ! /usr/sbin/asterisk -rx "core show version" &>/dev/null; do
+    retries=$((retries - 1))
+    if [ "$retries" -le 0 ]; then
+      echo "ERROR: Asterisk did not start in time." >&2
+      exit 1
+    fi
+    sleep 2
+  done
+  echo "Asterisk is running."
 
   cd "$FREEPBX_DIR"
   ./install -n \
@@ -51,8 +69,9 @@ install_freepbx() {
   fwconsole reload
   fwconsole chown
 
-  # Stop the temporary Asterisk - entrypoint will start it properly
+  # Stop the temporary Asterisk - entrypoint will start it properly via fwconsole
   /usr/sbin/asterisk -rx "core stop now" 2>/dev/null || true
+  wait "$ast_pid" 2>/dev/null || true
   sleep 2
 
   touch "$INSTALLED_MARKER"
