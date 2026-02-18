@@ -127,10 +127,12 @@ fwconsole chown || true
 
 echo ">>> FreePBX install phase complete"
 
-# Dump schemas for runtime import to external DB (still under set -e)
+# Dump schemas for runtime import to external DB (still under set -e).
+# --skip-definer strips DEFINER clauses from triggers/views/routines so
+# the runtime user can import without SUPER privilege.
 echo ">>> Dumping database schemas..."
-mariadb-dump asterisk > /usr/local/src/asterisk.sql
-mariadb-dump asteriskcdrdb > /usr/local/src/asteriskcdrdb.sql
+mariadb-dump --skip-definer asterisk > /usr/local/src/asterisk.sql
+mariadb-dump --skip-definer asteriskcdrdb > /usr/local/src/asteriskcdrdb.sql
 
 # Validate the dumps contain the critical table
 if ! grep -q 'freepbx_settings' /usr/local/src/asterisk.sql; then
