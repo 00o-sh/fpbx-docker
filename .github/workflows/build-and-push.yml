@@ -50,7 +50,7 @@ jobs:
         run: |
           echo "Waiting for FreePBX entrypoint to finish..."
           retries=120
-          until docker compose logs freepbx 2>&1 | grep -q "apache2ctl\|Apache\|AH00558\|FOREGROUND"; do
+          until docker compose logs freepbx 2>&1 | grep -q "FreePBX ready"; do
             retries=$((retries - 1))
             if [ "$retries" -le 0 ]; then
               echo "::error::FreePBX did not start in time"

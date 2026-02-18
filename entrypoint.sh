@@ -113,6 +113,7 @@ start_services() {
   fail2ban-client start &
 
   # Start Apache in foreground (keeps container running)
+  echo "FreePBX ready — starting Apache in foreground"
   exec apache2ctl -D FOREGROUND
 }
 
