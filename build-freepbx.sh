@@ -94,7 +94,9 @@ echo "Asterisk is running."
 # --- Install FreePBX from Sangoma repo ---
 echo ">>> Installing FreePBX ${FREEPBX_VERSION} from Sangoma repo..."
 apt-get update
-apt-get install -y --no-install-recommends freepbx${FREEPBX_VERSION}
+apt-get install -y --no-install-recommends \
+  -o Dpkg::Options::="--force-confnew" \
+  freepbx${FREEPBX_VERSION}
 rm -rf /var/lib/apt/lists/*
 
 echo ">>> Running fwconsole post-install..."
