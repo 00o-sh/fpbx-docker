@@ -34,10 +34,50 @@ mariadb -e "GRANT ALL ON asterisk.* TO 'freepbx'@'localhost';"
 mariadb -e "GRANT ALL ON asteriskcdrdb.* TO 'freepbx'@'localhost';"
 mariadb -e "FLUSH PRIVILEGES;"
 
+# --- Provide a minimal Asterisk config so it can start ---
+mkdir -p /var/run/asterisk /var/log/asterisk /var/lib/asterisk /var/spool/asterisk
+chown -R asterisk:asterisk /var/run/asterisk /var/log/asterisk /var/lib/asterisk \
+  /var/spool/asterisk /etc/asterisk
+
+# Determine modules directory
+AST_MOD_DIR=$(find /usr/lib -type d -name modules -path '*/asterisk/*' 2>/dev/null | head -1)
+AST_MOD_DIR="${AST_MOD_DIR:-/usr/lib/x86_64-linux-gnu/asterisk/modules}"
+
+cat > /etc/asterisk/asterisk.conf <<ASTEOF
+[directories]
+astetcdir => /etc/asterisk
+astmoddir => ${AST_MOD_DIR}
+astvarlibdir => /var/lib/asterisk
+astdbdir => /var/lib/asterisk
+astkeydir => /var/lib/asterisk
+astdatadir => /var/lib/asterisk
+astagidir => /var/lib/asterisk/agi-bin
+astspooldir => /var/spool/asterisk
+astrundir => /var/run/asterisk
+astlogdir => /var/log/asterisk
+astsbindir => /usr/sbin
+
+[options]
+runuser = asterisk
+rungroup = asterisk
+ASTEOF
+
+cat > /etc/asterisk/modules.conf <<'MODEOF'
+[modules]
+autoload = yes
+MODEOF
+
+cat > /etc/asterisk/logger.conf <<'LOGEOF'
+[general]
+
+[logfiles]
+console => notice,warning,error
+LOGEOF
+
+chown asterisk:asterisk /etc/asterisk/asterisk.conf /etc/asterisk/modules.conf /etc/asterisk/logger.conf
+
 # --- Start Asterisk temporarily ---
-mkdir -p /var/run/asterisk
-chown asterisk:asterisk /var/run/asterisk
-/usr/sbin/asterisk -U asterisk -G asterisk
+/usr/sbin/asterisk -U asterisk -G asterisk -C /etc/asterisk/asterisk.conf
 
 echo "Waiting for Asterisk..."
 retries=30
