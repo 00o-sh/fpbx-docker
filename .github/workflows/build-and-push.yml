@@ -45,10 +45,11 @@ jobs:
           done
           echo "MariaDB is healthy."
 
-      - name: Wait for FreePBX to start (up to 5 min)
+      - name: Wait for FreePBX to start (up to 10 min)
+        timeout-minutes: 12
         run: |
           echo "Waiting for FreePBX entrypoint to finish..."
-          retries=60
+          retries=120
           until docker compose logs freepbx 2>&1 | grep -q "apache2ctl\|Apache\|AH00558\|FOREGROUND"; do
             retries=$((retries - 1))
             if [ "$retries" -le 0 ]; then
@@ -62,6 +63,8 @@ jobs:
               docker compose logs freepbx
               exit 1
             fi
+            # Show last log line so CI isn't silent
+            docker compose logs freepbx 2>&1 | tail -1
             sleep 5
           done
           echo "FreePBX entrypoint completed."
