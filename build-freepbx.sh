@@ -3,7 +3,7 @@ set -eux
 
 FREEPBX_VERSION="${1:-17}"
 
-# Install MariaDB server temporarily for the build
+# Install MariaDB server temporarily for the FreePBX package postinst
 apt-get update
 apt-get install -y --no-install-recommends mariadb-server
 rm -rf /var/lib/apt/lists/*
@@ -14,7 +14,6 @@ chown mysql:mysql /var/run/mysqld
 mysqld --user=mysql --datadir=/var/lib/mysql &
 MYSQL_PID=$!
 
-# Wait for MariaDB to be ready
 echo "Waiting for temporary MariaDB..."
 retries=30
 until mariadb -e "SELECT 1" &>/dev/null; do
@@ -52,22 +51,15 @@ until /usr/sbin/asterisk -rx "core show version" &>/dev/null; do
 done
 echo "Asterisk is running."
 
-# --- Download and install FreePBX ---
-curl -fsSL "https://mirror.freepbx.org/modules/packages/freepbx/freepbx-${FREEPBX_VERSION}.0-latest.tgz" \
-  -o /usr/local/src/freepbx.tgz
-tar -xzf /usr/local/src/freepbx.tgz -C /usr/local/src
-rm /usr/local/src/freepbx.tgz
+# --- Install FreePBX from Sangoma repo ---
+echo ">>> Installing FreePBX ${FREEPBX_VERSION} from Sangoma repo..."
+apt-get update
+apt-get install -y --no-install-recommends freepbx${FREEPBX_VERSION}
+rm -rf /var/lib/apt/lists/*
 
-cd /usr/local/src/freepbx
-./install -n \
-  --dbhost localhost \
-  --dbuser freepbx \
-  --dbpass freepbx \
-  --dbname asterisk \
-  --cdrdbname asteriskcdrdb \
-  --webroot /var/www/html
-
-fwconsole ma installall
+echo ">>> Running fwconsole post-install..."
+fwconsole ma installlocal || true
+fwconsole ma upgradeall || true
 fwconsole reload || true
 fwconsole chown || true
 
@@ -76,7 +68,7 @@ echo ">>> FreePBX install phase complete"
 # --- From here on, don't let errors stop the build ---
 set +e
 
-# Dump schemas for runtime import
+# Dump schemas for runtime import to external DB
 echo ">>> Dumping database schemas..."
 mariadb-dump asterisk > /usr/local/src/asterisk.sql
 mariadb-dump asteriskcdrdb > /usr/local/src/asteriskcdrdb.sql
@@ -89,7 +81,7 @@ sleep 2
 kill "$MYSQL_PID" 2>/dev/null
 wait "$MYSQL_PID" 2>/dev/null
 
-# Remove MariaDB server
+# Remove MariaDB server (bypass maintainer scripts)
 echo ">>> Removing MariaDB server..."
 dpkg --purge --force-remove-reinstreq --force-depends \
   mariadb-server mariadb-server-10.11 mariadb-server-core-10.11 2>/dev/null
@@ -98,8 +90,7 @@ apt-get autoremove -y 2>/dev/null
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
-# Remove build script and FreePBX source
+# Cleanup
 rm -f /usr/local/src/build-freepbx.sh
-rm -rf /usr/local/src/freepbx
 
 echo "=== FreePBX build-time install complete ==="
