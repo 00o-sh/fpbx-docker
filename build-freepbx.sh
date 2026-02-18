@@ -3,6 +3,11 @@ set -eux
 
 FREEPBX_VERSION="${1:-17}"
 
+# Install MariaDB server temporarily for the build
+apt-get update
+apt-get install -y --no-install-recommends mariadb-server
+rm -rf /var/lib/apt/lists/*
+
 # --- Start temporary MariaDB ---
 mkdir -p /var/run/mysqld
 chown mysql:mysql /var/run/mysqld
@@ -73,17 +78,18 @@ mariadb-dump asteriskcdrdb > /usr/local/src/asteriskcdrdb.sql
 # --- Cleanup ---
 /usr/sbin/asterisk -rx "core stop now" 2>/dev/null || true
 sleep 2
-mysqladmin shutdown 2>/dev/null || true
+kill "$MYSQL_PID" 2>/dev/null || true
 wait "$MYSQL_PID" 2>/dev/null || true
 
-# Remove MariaDB server (not needed at runtime)
-apt-get purge -y mariadb-server
-apt-get autoremove -y
-rm -rf /var/lib/mysql /var/run/mysqld
+# Remove MariaDB server (bypass maintainer scripts that fail in Docker)
+dpkg --purge --force-remove-reinstreq --force-depends mariadb-server mariadb-server-10.11 mariadb-server-core-10.11 2>/dev/null || true
+rm -rf /var/lib/mysql /var/run/mysqld /etc/mysql
+apt-get autoremove -y 2>/dev/null || true
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
-# Remove build script
+# Remove build script and FreePBX source
 rm -f /usr/local/src/build-freepbx.sh
+rm -rf /usr/local/src/freepbx
 
 echo "=== FreePBX build-time install complete ==="

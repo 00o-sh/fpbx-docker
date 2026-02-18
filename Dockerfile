@@ -80,8 +80,8 @@ RUN apt-get update \
     php8.2-soap php8.2-sqlite3 php8.2-bcmath php8.2-zip \
     php8.2-bz2 php8.2-ldap php8.2-ssh2 php8.2-redis \
     php-pear \
-    # MariaDB (server for build-time install, client for runtime)
-    mariadb-server mariadb-client \
+    # MariaDB client
+    mariadb-client \
     # Node.js & npm
     nodejs npm \
     # Redis
