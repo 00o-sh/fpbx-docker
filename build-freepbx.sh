@@ -145,6 +145,8 @@ fwconsole ma list 2>/dev/null | awk '/Commercial/ {print $2}' | while read -r mo
   echo "  removing commercial module: $mod"
   fwconsole ma -f remove "$mod" 2>/dev/null || true
 done
+# Firewall depends on the commercial sysadmin module (official script removes it explicitly)
+fwconsole ma -f remove firewall 2>/dev/null || true
 
 # Install and enable open-source modules that were flagged as missing
 fwconsole ma install recordings || true
