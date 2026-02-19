@@ -1,8 +1,9 @@
 FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
-ARG ASTERISK_VERSION=21
+ARG ASTERISK_VERSION=22
 ARG FREEPBX_VERSION=17
+ARG PHPVERSION="8.2"
 
 # Add Sangoma/FreePBX repository
 RUN apt-get update \
