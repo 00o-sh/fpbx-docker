@@ -97,6 +97,7 @@ RUN set -eux \
   && sed -i 's/\(^ServerTokens \).*/\1Prod/' /etc/apache2/conf-available/security.conf \
   && sed -i 's/\(^ServerSignature \).*/\1Off/' /etc/apache2/conf-available/security.conf \
   && rm -f /var/www/html/index.html \
+  && printf '<?php header("Location: /admin/"); exit; ?>\n' > /var/www/html/index.php \
   # PHP config
   && sed -i 's/\(^upload_max_filesize = \).*/\120M/' /etc/php/8.2/apache2/php.ini \
   && sed -i 's/\(^memory_limit = \).*/\1256M/' /etc/php/8.2/apache2/php.ini \
