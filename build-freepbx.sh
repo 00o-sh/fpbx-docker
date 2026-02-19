@@ -138,12 +138,15 @@ fi
 # Post-install module setup (matches official sng_freepbx_debian_install.sh)
 echo ">>> Running fwconsole post-install..."
 
-# Remove commercial modules that cannot work without a license
-# (same approach as official script's --opensourceonly mode)
-echo ">>> Removing unlicensed commercial modules..."
+# Remove commercial modules that cannot work without a license,
+# but keep sysadmin + firewall so the FreePBX firewall UI stays available.
+echo ">>> Removing unlicensed commercial modules (keeping sysadmin/firewall)..."
 fwconsole ma list 2>/dev/null | awk '/Commercial/ {print $2}' | while read -r mod; do
-  echo "  removing commercial module: $mod"
-  fwconsole ma -f remove "$mod" 2>/dev/null || true
+  case "$mod" in
+    sysadmin|firewall) echo "  keeping: $mod" ;;
+    *) echo "  removing commercial module: $mod"
+       fwconsole ma -f remove "$mod" 2>/dev/null || true ;;
+  esac
 done
 
 # Install and enable open-source modules that were flagged as missing
