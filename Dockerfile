@@ -97,7 +97,6 @@ RUN set -eux \
   && sed -i 's/\(^ServerTokens \).*/\1Prod/' /etc/apache2/conf-available/security.conf \
   && sed -i 's/\(^ServerSignature \).*/\1Off/' /etc/apache2/conf-available/security.conf \
   && rm -f /var/www/html/index.html \
-  && printf '<?php header("Location: /admin/"); exit; ?>\n' > /var/www/html/index.php \
   # PHP config
   && sed -i 's/\(^upload_max_filesize = \).*/\120M/' /etc/php/8.2/apache2/php.ini \
   && sed -i 's/\(^memory_limit = \).*/\1256M/' /etc/php/8.2/apache2/php.ini \
@@ -127,6 +126,8 @@ RUN a2dissite 000-default 2>/dev/null || true \
      fi \
   && a2ensite default-ssl 2>/dev/null || true \
   && phpenmod freepbx 2>/dev/null || true \
+  # Redirect / → /admin/ (must be AFTER freepbx package install which overwrites webroot)
+  && printf '<?php header("Location: /admin/"); exit; ?>\n' > /var/www/html/index.php \
   && chown -R asterisk:asterisk /var/www/html
 
 # Save build-time defaults so the entrypoint can seed empty PVC mounts.
