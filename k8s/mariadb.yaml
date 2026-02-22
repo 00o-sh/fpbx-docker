@@ -1,0 +1,65 @@
+---
+# MariaDB instance managed by mariadb-operator.
+# Prerequisites: mariadb-operator installed in the cluster.
+# Secrets must exist before applying (create them or set generate: true
+# if your operator version supports it).
+#
+# kubectl create secret generic freepbx-mariadb-root \
+#   --from-literal=password='changeme_root'
+# kubectl create secret generic freepbx-mariadb-password \
+#   --from-literal=password='changeme_fpbx'
+---
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: MariaDB
+metadata:
+  name: freepbx-mariadb
+spec:
+  rootPasswordSecretKeyRef:
+    name: freepbx-mariadb-root
+    key: password
+  username: freepbx
+  passwordSecretKeyRef:
+    name: freepbx-mariadb-password
+    key: password
+  database: asterisk
+  image: mariadb:10.11
+  port: 3306
+  storage:
+    size: 5Gi
+    storageClassName: local-path   # k3s default
+  replicas: 1
+  myCnf: |
+    [mariadb]
+    bind-address=*
+    default_storage_engine=InnoDB
+    binlog_format=row
+    innodb_autoinc_lock_mode=2
+    max_allowed_packet=256M
+---
+# Second database for CDR records
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Database
+metadata:
+  name: asteriskcdrdb
+spec:
+  mariaDbRef:
+    name: freepbx-mariadb
+  characterSet: utf8mb4
+  collate: utf8mb4_unicode_ci
+  name: asteriskcdrdb
+---
+# Grant freepbx user access to CDR database
+# (the primary 'asterisk' db grant is implicit from the MariaDB CR)
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: Grant
+metadata:
+  name: freepbx-cdrdb-grant
+spec:
+  mariaDbRef:
+    name: freepbx-mariadb
+  privileges:
+    - ALL PRIVILEGES
+  database: asteriskcdrdb
+  table: "*"
+  username: freepbx
+  grantOption: false

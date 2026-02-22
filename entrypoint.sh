@@ -11,6 +11,20 @@ DB_CDR_NAME="${DB_CDR_NAME:-asteriskcdrdb}"
 INSTALLED_MARKER="/var/lib/asterisk/.fpbx_installed"
 
 # ---------------------------------------------------------------
+# Graceful shutdown (k8s sends SIGTERM to PID 1)
+# ---------------------------------------------------------------
+cleanup() {
+  echo "Caught signal — shutting down gracefully..."
+  fail2ban-client stop 2>/dev/null || true
+  fwconsole stop 2>/dev/null || true
+  redis-cli shutdown 2>/dev/null || true
+  service postfix stop 2>/dev/null || true
+  apache2ctl stop 2>/dev/null || true
+  exit 0
+}
+trap cleanup SIGTERM SIGINT
+
+# ---------------------------------------------------------------
 # Rewrite FreePBX & ODBC configs to point at the external DB
 # (runs every start so a container recreate never stales)
 # ---------------------------------------------------------------
@@ -112,9 +126,11 @@ start_services() {
   rm -f /var/run/fail2ban/fail2ban.pid /var/run/fail2ban/fail2ban.sock
   fail2ban-client start &
 
-  # Start Apache in foreground (keeps container running)
-  echo "FreePBX ready — starting Apache in foreground"
-  exec apache2ctl -D FOREGROUND
+  # Start Apache in background; shell stays PID 1 to handle SIGTERM
+  echo "FreePBX ready — starting Apache"
+  apache2ctl -D FOREGROUND &
+  APACHE_PID=$!
+  wait $APACHE_PID
 }
 
 # ---------------------------------------------------------------
