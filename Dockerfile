@@ -129,6 +129,12 @@ RUN a2dissite 000-default 2>/dev/null || true \
   && phpenmod freepbx 2>/dev/null || true \
   && chown -R asterisk:asterisk /var/www/html
 
+# Save build-time defaults so the entrypoint can seed empty PVC mounts.
+# In k8s, PVCs shadow the image contents — without this, fwconsole and
+# all FreePBX module files disappear on first run.
+RUN cp -a /etc/asterisk /etc/asterisk-defaults \
+  && cp -a /var/lib/asterisk /var/lib/asterisk-defaults
+
 # Copy configs and entrypoint
 # Note: odbc.ini is generated at runtime by entrypoint.sh from env vars
 COPY config/odbc/odbcinst.ini /etc/odbcinst.ini
