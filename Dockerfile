@@ -127,6 +127,7 @@ RUN a2dissite 000-default 2>/dev/null || true \
   && a2ensite default-ssl 2>/dev/null || true \
   && phpenmod freepbx 2>/dev/null || true \
   # Redirect / → /admin/ (must be AFTER freepbx package install which overwrites webroot)
+  && rm -f /var/www/html/index.html \
   && printf '<?php header("Location: /admin/"); exit; ?>\n' > /var/www/html/index.php \
   && chown -R asterisk:asterisk /var/www/html
 
