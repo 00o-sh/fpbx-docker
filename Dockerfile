@@ -129,7 +129,7 @@ RUN a2dissite 000-default 2>/dev/null || true \
   # Redirect / → /admin/ (must be AFTER freepbx package install which overwrites webroot)
   && rm -f /var/www/html/index.html \
   && printf '<?php header("Location: /admin/"); exit; ?>\n' > /var/www/html/index.php \
-  && chown -R asterisk:asterisk /var/www/html
+  && chown asterisk:asterisk /var/www/html/index.php
 
 # Save build-time defaults so the entrypoint can seed empty PVC mounts.
 # In k8s, PVCs shadow the image contents — without this, fwconsole and
