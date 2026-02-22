@@ -11,6 +11,21 @@ DB_CDR_NAME="${DB_CDR_NAME:-asteriskcdrdb}"
 INSTALLED_MARKER="/var/lib/asterisk/.fpbx_installed"
 
 # ---------------------------------------------------------------
+# Seed empty PVC mounts with build-time defaults
+# (k8s PVCs shadow the image layers — fresh mounts are empty)
+# ---------------------------------------------------------------
+init_volumes() {
+  if [ -d /var/lib/asterisk-defaults ] && [ ! -f /var/lib/asterisk/bin/fwconsole ]; then
+    echo "Seeding /var/lib/asterisk from image defaults..."
+    cp -a /var/lib/asterisk-defaults/. /var/lib/asterisk/
+  fi
+  if [ -d /etc/asterisk-defaults ] && [ ! -f /etc/asterisk/asterisk.conf ]; then
+    echo "Seeding /etc/asterisk from image defaults..."
+    cp -a /etc/asterisk-defaults/. /etc/asterisk/
+  fi
+}
+
+# ---------------------------------------------------------------
 # Graceful shutdown (k8s sends SIGTERM to PID 1)
 # ---------------------------------------------------------------
 cleanup() {
@@ -136,6 +151,7 @@ start_services() {
 # ---------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------
+init_volumes
 wait_for_db
 configure_db
 
