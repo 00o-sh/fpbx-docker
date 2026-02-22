@@ -140,6 +140,7 @@ RUN chmod +x /entrypoint.sh
 
 EXPOSE 5060/udp 5060/tcp 5061/tcp 80 443 10000-20000/udp 8001 8003
 
-VOLUME ["/etc/asterisk", "/var/lib/asterisk", "/var/spool/asterisk", "/var/log/asterisk"]
+# No VOLUME directive — persistence is managed by PVCs in k8s
+# and explicit volume mounts in docker-compose.
 
 CMD ["/entrypoint.sh"]
