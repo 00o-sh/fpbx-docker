@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim
+FROM debian:bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 ARG ASTERISK_VERSION=22
