@@ -156,10 +156,7 @@ fwconsole ma installlocal || true
 fwconsole ma upgradeall || true
 fwconsole reload || true
 fwconsole restart || true
-# Plain chown is much faster than fwconsole chown, which loads the full
-# FreePBX PHP framework and does per-module permission logic.
-chown -R asterisk:asterisk /var/www/html /var/lib/asterisk /etc/asterisk \
-  /var/spool/asterisk /var/log/asterisk /var/run/asterisk
+fwconsole chown || true
 fwconsole ma refreshsignatures || true
 
 echo ">>> FreePBX install phase complete"
