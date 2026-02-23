@@ -67,6 +67,8 @@ RUN apt-get update \
     ipset iptables fail2ban \
     # Mail
     postfix libsasl2-modules mailutils \
+    # FreePBX system-level packages (matches official install script)
+    sysadmin17 sangoma-pbx17 \
     # Misc
     logrotate incron \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
