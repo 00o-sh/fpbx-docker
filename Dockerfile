@@ -126,10 +126,12 @@ RUN a2dissite 000-default 2>/dev/null || true \
      fi \
   && a2ensite default-ssl 2>/dev/null || true \
   && phpenmod freepbx 2>/dev/null || true \
-  # Redirect / → /admin/ (must be AFTER freepbx package install which overwrites webroot)
+  # Redirect / → /admin/ at the Apache level (works even if PHP isn't
+  # processing the webroot index.php for any reason).
   && rm -f /var/www/html/index.html \
-  && printf '<?php header("Location: /admin/"); exit; ?>\n' > /var/www/html/index.php \
-  && chown asterisk:asterisk /var/www/html/index.php
+  && printf 'RedirectMatch ^/$ /admin/\n' \
+       > /etc/apache2/conf-available/redirect-root.conf \
+  && a2enconf redirect-root
 
 # Save build-time defaults so the entrypoint can seed empty PVC mounts.
 # In k8s, PVCs shadow the image contents — without this, fwconsole and
