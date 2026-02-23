@@ -152,6 +152,8 @@ done
 # Install and enable open-source modules that were flagged as missing
 fwconsole ma install recordings || true
 fwconsole ma enable recordings || true
+fwconsole ma install findmefollow || true
+fwconsole ma enable findmefollow || true
 fwconsole ma installlocal || true
 fwconsole ma upgradeall || true
 fwconsole reload || true

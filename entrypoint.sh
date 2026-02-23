@@ -128,7 +128,7 @@ sync_db_settings() {
 # module registrations even though the files exist on disk.
 # ---------------------------------------------------------------
 ensure_modules() {
-  local mods="recordings"
+  local mods="recordings findmefollow"
   for mod in $mods; do
     if ! fwconsole ma list 2>/dev/null | grep -qw "$mod"; then
       echo "Installing missing module: $mod"
