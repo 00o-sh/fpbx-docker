@@ -95,6 +95,34 @@ wait_for_db() {
 }
 
 # ---------------------------------------------------------------
+# Sync database-stored FreePBX settings with env vars
+# FreePBX loads settings from freepbx_settings which OVERRIDE
+# values in /etc/freepbx.conf, so the DB must match the env.
+# ---------------------------------------------------------------
+sync_db_settings() {
+  echo "Syncing FreePBX CDR database settings with environment..."
+
+  # SQL-escape single quotes in values
+  local q_cdr="${DB_CDR_NAME//\'/\'\'}"
+  local q_host="${DB_HOST//\'/\'\'}"
+  local q_port="${DB_PORT//\'/\'\'}"
+  local q_user="${DB_USER//\'/\'\'}"
+  local q_pass="${DB_PASS//\'/\'\'}"
+
+  mariadb -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+    -e "
+      UPDATE freepbx_settings SET value='${q_cdr}'  WHERE keyword='CDRDBNAME';
+      UPDATE freepbx_settings SET value='${q_host}' WHERE keyword='CDRDBHOST';
+      UPDATE freepbx_settings SET value='${q_port}' WHERE keyword='CDRDBPORT';
+      UPDATE freepbx_settings SET value='${q_user}' WHERE keyword='CDRDBUSER';
+      UPDATE freepbx_settings SET value='${q_pass}' WHERE keyword='CDRDBPASS';
+      UPDATE freepbx_settings SET value='mysql'     WHERE keyword='CDRDBTYPE';
+    " 2>/dev/null || true
+
+  echo "FreePBX CDR settings synced (CDRDBNAME=${DB_CDR_NAME})."
+}
+
+# ---------------------------------------------------------------
 # First-run: import pre-built schema and update DB connection
 # ---------------------------------------------------------------
 init_db() {
@@ -158,6 +186,9 @@ configure_db
 if [ ! -f "$INSTALLED_MARKER" ]; then
   init_db
 fi
+
+# Ensure freepbx_settings rows match env vars (CDR DB name, host, etc.)
+sync_db_settings
 
 # Ensure ownership is correct on mounted volumes
 chown -R asterisk:asterisk /etc/asterisk /var/lib/asterisk /var/spool/asterisk /var/log/asterisk 2>/dev/null || true
