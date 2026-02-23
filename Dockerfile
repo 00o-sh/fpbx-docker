@@ -16,59 +16,96 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Install all runtime dependencies + Asterisk + FreePBX deps
+# Package list matches official sng_freepbx_debian_install.sh (DEPPRODPKGS,
+# ASTPKGS, FPBXPKGS arrays) minus packages that don't apply in Docker
+# (openssh-server, chrony, mariadb-server, screen, htop, sysstat, etc.)
+#
+# The official script installs each package individually via pkg_install()
+# so missing packages don't block the rest. We split into:
+#   1) Core packages (always available on Debian bookworm + Sangoma repo)
+#   2) Additional packages installed individually (may vary by repo version)
 RUN apt-get update \
   && echo "postfix postfix/mailname string freepbx.localdomain" | debconf-set-selections \
   && echo "postfix postfix/main_mailer_type string 'Internet Site'" | debconf-set-selections \
   && apt-get install -y \
-    curl ca-certificates gnupg sudo \
-    # Asterisk from Sangoma repo
+    # --- Core system deps (DEPPRODPKGS) ---
+    curl ca-certificates gnupg sudo wget \
+    redis-server ghostscript libtiff-tools net-tools rsyslog nmap zip \
+    apache2 incron cron at logrotate \
+    bison flex git \
+    # --- PHP ---
+    php${PHPVERSION} php${PHPVERSION}-cli php${PHPVERSION}-common \
+    php${PHPVERSION}-curl php${PHPVERSION}-gd php${PHPVERSION}-mbstring \
+    php${PHPVERSION}-mysql php${PHPVERSION}-xml php${PHPVERSION}-intl \
+    php${PHPVERSION}-soap php${PHPVERSION}-sqlite3 php${PHPVERSION}-bcmath \
+    php${PHPVERSION}-zip php${PHPVERSION}-bz2 php${PHPVERSION}-ldap \
+    php${PHPVERSION}-ssh2 php${PHPVERSION}-redis \
+    php-pear \
+    # --- Database client ---
+    mariadb-client \
+    # --- ODBC ---
+    unixodbc odbc-mariadb \
+    # --- Audio/media tools ---
+    sox lame ffmpeg mpg123 sqlite3 uuid expect \
+    sngrep flite \
+    # --- Asterisk (ASTPKGS) ---
     asterisk${ASTERISK_VERSION} \
+    asterisk${ASTERISK_VERSION}-addons \
+    asterisk${ASTERISK_VERSION}-addons-bluetooth \
+    asterisk${ASTERISK_VERSION}-addons-core \
+    asterisk${ASTERISK_VERSION}-addons-mysql \
+    asterisk${ASTERISK_VERSION}-addons-ooh323 \
     asterisk${ASTERISK_VERSION}-core \
     asterisk${ASTERISK_VERSION}-curl \
+    asterisk${ASTERISK_VERSION}-doc \
     asterisk${ASTERISK_VERSION}-odbc \
     asterisk${ASTERISK_VERSION}-ogg \
     asterisk${ASTERISK_VERSION}-flite \
+    asterisk${ASTERISK_VERSION}-g729 \
     asterisk${ASTERISK_VERSION}-resample \
     asterisk${ASTERISK_VERSION}-snmp \
     asterisk${ASTERISK_VERSION}-speex \
     asterisk${ASTERISK_VERSION}-sqlite3 \
-    asterisk${ASTERISK_VERSION}-voicemail \
-    asterisk${ASTERISK_VERSION}-addons \
-    asterisk${ASTERISK_VERSION}-addons-core \
-    asterisk${ASTERISK_VERSION}-addons-mysql \
-    asterisk${ASTERISK_VERSION}-addons-bluetooth \
-    asterisk${ASTERISK_VERSION}-addons-ooh323 \
-    asterisk${ASTERISK_VERSION}-doc \
-    asterisk${ASTERISK_VERSION}-g729 \
     asterisk${ASTERISK_VERSION}-res-digium-phone \
+    asterisk${ASTERISK_VERSION}-voicemail \
     asterisk-version-switch \
     asterisk-sounds-core-en-ulaw \
-    # Utilities
-    sox lame ffmpeg mpg123 sqlite3 uuid expect \
-    net-tools sngrep flite at cron \
-    # Apache & PHP 8.2
-    apache2 \
-    php8.2 php8.2-cli php8.2-common php8.2-curl php8.2-gd \
-    php8.2-mbstring php8.2-mysql php8.2-xml php8.2-intl \
-    php8.2-soap php8.2-sqlite3 php8.2-bcmath php8.2-zip \
-    php8.2-bz2 php8.2-ldap php8.2-ssh2 php8.2-redis \
-    php-pear \
-    # IonCube (required by FreePBX)
-    ioncube-loader-82 \
-    # MariaDB client
-    mariadb-client \
-    # ODBC + runtime libs not pulled as deps
-    unixodbc odbc-mariadb liburiparser1 \
-    # Node.js & npm
-    nodejs npm \
-    # Redis
-    redis-server \
-    # Security
+    # --- Network services ---
+    tftpd-hpa xinetd haproxy \
+    openvpn easy-rsa \
+    # --- Security ---
     ipset iptables fail2ban \
-    # Mail
+    # --- Mail ---
     postfix libsasl2-modules mailutils \
-    # Misc
-    logrotate incron \
+    # --- mDNS / Avahi ---
+    avahi-daemon avahi-utils libnss-mdns libavahi-client3 \
+    # --- System Admin module deps ---
+    python3-mysqldb python-is-python3 \
+    # --- UCP module deps ---
+    pkgconf libicu-dev \
+    # --- Runtime libraries ---
+    liburiparser1 imagemagick libbluetooth3 \
+    # --- Node.js & npm ---
+    nodejs npm \
+    # --- IonCube (required by commercial modules) ---
+    ioncube-loader-82 \
+  && echo ">>> Installing FreePBX system packages (FPBXPKGS)..." \
+  && ln -sf /bin/true /usr/bin/systemctl \
+  && apt-get install -y -o Dpkg::Options::="--force-confnew" -o Dpkg::Options::="--force-overwrite" \
+       sysadmin17 sangoma-pbx17 \
+  && rm -f /usr/bin/systemctl \
+  && echo ">>> Installing additional runtime libraries (non-fatal if missing)..." \
+  && for pkg in \
+       asterisk${ASTERISK_VERSION}.0-freepbx-asterisk-modules \
+       libavdevice59 libsrtp2-1 libspandsp2 libncurses5 \
+       libical3 libneon27 libsnmp40 libtonezone \
+       libunbound8 libsybdb5 libspeexdsp1 libiksemel3 \
+       libresample1 libgmime-3.0-0 libc-client2007e \
+       libfdk-aac2; do \
+     apt-get install -y "$pkg" 2>/dev/null \
+       && echo "  installed: $pkg" \
+       || echo "  skipped (not available): $pkg"; \
+  done \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Configure asterisk user, Apache, PHP
@@ -107,7 +144,14 @@ RUN set -eux \
   # OpenSSL compat
   && sed -i 's/^openssl_conf = openssl_init$/openssl_conf = default_conf/' /etc/ssl/openssl.cnf \
   && printf '\n[ default_conf ]\nssl_conf = ssl_sect\n[ssl_sect]\nsystem_default = system_default_sect\n[system_default_sect]\nMinProtocol = TLSv1.2\nCipherString = DEFAULT:@SECLEVEL=1\n' \
-       >> /etc/ssl/openssl.cnf
+       >> /etc/ssl/openssl.cnf \
+  # Postfix hardening (matches official script)
+  && postconf -e 'inet_interfaces = 127.0.0.1' \
+  && postconf -e 'message_size_limit = 102400000' \
+  # OpenVPN EasyRSA setup (used by sysadmin VPN feature)
+  && mkdir -p /etc/openvpn \
+  && make-cadir /etc/openvpn/easyrsa3 2>/dev/null || true \
+  && rm -f /etc/openvpn/easyrsa3/pki/vars /etc/openvpn/easyrsa3/vars
 
 # Install FreePBX at build time using a temp MariaDB
 COPY build-freepbx.sh /usr/local/src/build-freepbx.sh
@@ -132,7 +176,8 @@ RUN rm -f /var/www/html/index.html \
 # In k8s, PVCs shadow the image contents — without this, fwconsole and
 # all FreePBX module files disappear on first run.
 RUN cp -a /etc/asterisk /etc/asterisk-defaults \
-  && cp -a /var/lib/asterisk /var/lib/asterisk-defaults
+  && cp -a /var/lib/asterisk /var/lib/asterisk-defaults \
+  && cp -a /var/spool/asterisk /var/spool/asterisk-defaults
 
 # Copy configs and entrypoint
 # Note: odbc.ini is generated at runtime by entrypoint.sh from env vars
@@ -144,6 +189,9 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 5060/udp 5060/tcp 5061/tcp 80 443 10000-20000/udp 8001 8003
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+  CMD curl -sf http://localhost/admin/ || exit 1
 
 # No VOLUME directive — persistence is managed by PVCs in k8s
 # and explicit volume mounts in docker-compose.

@@ -136,26 +136,21 @@ if ! /usr/sbin/asterisk -rx "core show version" &>/dev/null; then
 fi
 
 # Post-install module setup (matches official sng_freepbx_debian_install.sh)
+# The official script does NOT remove commercial modules in the standard
+# install path (only with --opensourceonly). We match that: keep everything.
 echo ">>> Running fwconsole post-install..."
 
-# Remove commercial modules that cannot work without a license,
-# but keep sysadmin + firewall so the FreePBX firewall UI stays available.
-echo ">>> Removing unlicensed commercial modules (keeping sysadmin/firewall)..."
-fwconsole ma list 2>/dev/null | awk '/Commercial/ {print $2}' | while read -r mod; do
-  case "$mod" in
-    sysadmin|firewall) echo "  keeping: $mod" ;;
-    *) echo "  removing commercial module: $mod"
-       fwconsole ma -f remove "$mod" 2>/dev/null || true ;;
-  esac
-done
-
-# Install and enable open-source modules that were flagged as missing
-fwconsole ma install recordings || true
-fwconsole ma enable recordings || true
+echo ">>> Installing all local modules"
 fwconsole ma installlocal || true
+
+echo ">>> Upgrading all modules"
 fwconsole ma upgradeall || true
+
+echo ">>> Reloading and restarting FreePBX"
 fwconsole reload || true
 fwconsole restart || true
+
+echo ">>> Refreshing module signatures"
 fwconsole ma refreshsignatures || true
 
 echo ">>> FreePBX install phase complete"
