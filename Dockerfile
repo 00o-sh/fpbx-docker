@@ -96,7 +96,6 @@ RUN set -eux \
   && echo "ServerName localhost" >> /etc/apache2/apache2.conf \
   && sed -i 's/\(^ServerTokens \).*/\1Prod/' /etc/apache2/conf-available/security.conf \
   && sed -i 's/\(^ServerSignature \).*/\1Off/' /etc/apache2/conf-available/security.conf \
-  && rm -f /var/www/html/index.html \
   # PHP config
   && sed -i 's/\(^upload_max_filesize = \).*/\120M/' /etc/php/8.2/apache2/php.ini \
   && sed -i 's/\(^memory_limit = \).*/\1256M/' /etc/php/8.2/apache2/php.ini \
@@ -115,8 +114,9 @@ COPY build-freepbx.sh /usr/local/src/build-freepbx.sh
 RUN chmod +x /usr/local/src/build-freepbx.sh \
   && /usr/local/src/build-freepbx.sh "${FREEPBX_VERSION}"
 
-# Enable FreePBX Apache/PHP config (matches official sng_freepbx_debian_install.sh)
-RUN a2dissite 000-default 2>/dev/null || true \
+# Post-install Apache/PHP config (matches official sng_freepbx_debian_install.sh order)
+RUN rm -f /var/www/html/index.html \
+  && a2dissite 000-default 2>/dev/null || true \
   && if [ -f /etc/apache2/sites-available/freepbx.conf ]; then \
        a2ensite freepbx; \
      else \
@@ -126,7 +126,7 @@ RUN a2dissite 000-default 2>/dev/null || true \
      fi \
   && a2ensite default-ssl 2>/dev/null || true \
   && phpenmod freepbx 2>/dev/null || true \
-  && rm -f /var/www/html/index.html
+  && chown -R asterisk:asterisk /var/www/html/
 
 # Save build-time defaults so the entrypoint can seed empty PVC mounts.
 # In k8s, PVCs shadow the image contents — without this, fwconsole and
