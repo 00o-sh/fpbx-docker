@@ -138,15 +138,13 @@ fi
 # Post-install module setup (matches official sng_freepbx_debian_install.sh)
 echo ">>> Running fwconsole post-install..."
 
-# Remove commercial modules that cannot work without a license,
-# but keep sysadmin + firewall so the FreePBX firewall UI stays available.
-echo ">>> Removing unlicensed commercial modules (keeping sysadmin/firewall)..."
+# Remove commercial modules — they require Sangoma system packages
+# and licenses that don't exist in a Docker container.
+# Security is handled by fail2ban + iptables (see jail.local).
+echo ">>> Removing commercial modules..."
 fwconsole ma list 2>/dev/null | awk '/Commercial/ {print $2}' | while read -r mod; do
-  case "$mod" in
-    sysadmin|firewall) echo "  keeping: $mod" ;;
-    *) echo "  removing commercial module: $mod"
-       fwconsole ma -f remove "$mod" 2>/dev/null || true ;;
-  esac
+  echo "  removing commercial module: $mod"
+  fwconsole ma -f remove "$mod" 2>/dev/null || true
 done
 
 # Install and enable open-source modules whose dialplan contexts
