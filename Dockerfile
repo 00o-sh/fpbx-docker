@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim
+FROM debian:bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 ARG ASTERISK_VERSION=22
@@ -30,7 +30,7 @@ RUN apt-get update \
   && apt-get install -y \
     # --- Core system deps (DEPPRODPKGS) ---
     curl ca-certificates gnupg sudo wget \
-    redis-server ghostscript libtiff-tools net-tools rsyslog nmap zip \
+    redis-server ghostscript libtiff-tools net-tools iproute2 rsyslog nmap zip \
     apache2 incron cron at logrotate \
     bison flex git \
     # --- PHP ---
