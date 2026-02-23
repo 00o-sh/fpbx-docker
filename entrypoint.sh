@@ -123,6 +123,22 @@ sync_db_settings() {
 }
 
 # ---------------------------------------------------------------
+# Ensure required FreePBX modules are installed and enabled.
+# After a fresh PVC seed or schema reimport the DB may lack
+# module registrations even though the files exist on disk.
+# ---------------------------------------------------------------
+ensure_modules() {
+  local mods="recordings"
+  for mod in $mods; do
+    if ! fwconsole ma list 2>/dev/null | grep -qw "$mod"; then
+      echo "Installing missing module: $mod"
+      fwconsole ma install "$mod" 2>/dev/null || true
+    fi
+    fwconsole ma enable "$mod" 2>/dev/null || true
+  done
+}
+
+# ---------------------------------------------------------------
 # First-run: import pre-built schema and update DB connection
 # ---------------------------------------------------------------
 init_db() {
@@ -192,5 +208,8 @@ sync_db_settings
 
 # Ensure ownership is correct on mounted volumes
 chown -R asterisk:asterisk /etc/asterisk /var/lib/asterisk /var/spool/asterisk /var/log/asterisk 2>/dev/null || true
+
+# Ensure required modules are present and enabled
+ensure_modules
 
 start_services
