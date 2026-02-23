@@ -156,7 +156,6 @@ fwconsole ma installlocal || true
 fwconsole ma upgradeall || true
 fwconsole reload || true
 fwconsole restart || true
-fwconsole chown || true
 fwconsole ma refreshsignatures || true
 
 echo ">>> FreePBX install phase complete"
