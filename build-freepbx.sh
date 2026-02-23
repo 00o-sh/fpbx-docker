@@ -149,11 +149,12 @@ fwconsole ma list 2>/dev/null | awk '/Commercial/ {print $2}' | while read -r mo
   esac
 done
 
-# Install and enable open-source modules that were flagged as missing
-fwconsole ma install recordings || true
-fwconsole ma enable recordings || true
-fwconsole ma install findmefollow || true
-fwconsole ma enable findmefollow || true
+# Install and enable open-source modules whose dialplan contexts
+# other modules depend on (prevents "died in splice" errors).
+for mod in recordings findmefollow ringgroups queues voicemail callrecording; do
+  fwconsole ma install "$mod" || true
+  fwconsole ma enable "$mod" || true
+done
 fwconsole ma installlocal || true
 fwconsole ma upgradeall || true
 fwconsole reload || true

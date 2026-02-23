@@ -23,6 +23,10 @@ init_volumes() {
     echo "Seeding /etc/asterisk from image defaults..."
     cp -a /etc/asterisk-defaults/. /etc/asterisk/
   fi
+  if [ -d /var/spool/asterisk-defaults ] && [ ! -d /var/spool/asterisk/voicemail ]; then
+    echo "Seeding /var/spool/asterisk from image defaults..."
+    cp -a /var/spool/asterisk-defaults/. /var/spool/asterisk/
+  fi
 }
 
 # ---------------------------------------------------------------
@@ -128,7 +132,7 @@ sync_db_settings() {
 # module registrations even though the files exist on disk.
 # ---------------------------------------------------------------
 ensure_modules() {
-  local mods="recordings findmefollow"
+  local mods="recordings findmefollow ringgroups queues voicemail callrecording"
   for mod in $mods; do
     if ! fwconsole ma list 2>/dev/null | grep -qw "$mod"; then
       echo "Installing missing module: $mod"
@@ -208,8 +212,12 @@ sync_db_settings
 
 # Ensure ownership is correct on mounted volumes
 chown -R asterisk:asterisk /etc/asterisk /var/lib/asterisk /var/spool/asterisk /var/log/asterisk 2>/dev/null || true
+fwconsole chown 2>/dev/null || true
 
 # Ensure required modules are present and enabled
 ensure_modules
+
+# Regenerate dialplan after module changes so all splice targets exist
+fwconsole reload 2>/dev/null || true
 
 start_services

@@ -132,7 +132,8 @@ RUN rm -f /var/www/html/index.html \
 # In k8s, PVCs shadow the image contents — without this, fwconsole and
 # all FreePBX module files disappear on first run.
 RUN cp -a /etc/asterisk /etc/asterisk-defaults \
-  && cp -a /var/lib/asterisk /var/lib/asterisk-defaults
+  && cp -a /var/lib/asterisk /var/lib/asterisk-defaults \
+  && cp -a /var/spool/asterisk /var/spool/asterisk-defaults
 
 # Copy configs and entrypoint
 # Note: odbc.ini is generated at runtime by entrypoint.sh from env vars
@@ -144,6 +145,9 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 5060/udp 5060/tcp 5061/tcp 80 443 10000-20000/udp 8001 8003
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+  CMD curl -sf http://localhost/admin/ || exit 1
 
 # No VOLUME directive — persistence is managed by PVCs in k8s
 # and explicit volume mounts in docker-compose.
