@@ -19,6 +19,11 @@ RUN apt-get update \
 # Package list matches official sng_freepbx_debian_install.sh (DEPPRODPKGS,
 # ASTPKGS, FPBXPKGS arrays) minus packages that don't apply in Docker
 # (openssh-server, chrony, mariadb-server, screen, htop, sysstat, etc.)
+#
+# The official script installs each package individually via pkg_install()
+# so missing packages don't block the rest. We split into:
+#   1) Core packages (always available on Debian bookworm + Sangoma repo)
+#   2) Additional packages installed individually (may vary by repo version)
 RUN apt-get update \
   && echo "postfix postfix/mailname string freepbx.localdomain" | debconf-set-selections \
   && echo "postfix postfix/main_mailer_type string 'Internet Site'" | debconf-set-selections \
@@ -28,7 +33,7 @@ RUN apt-get update \
     redis-server ghostscript libtiff-tools net-tools rsyslog nmap zip \
     apache2 incron cron at logrotate \
     bison flex git \
-    # --- PHP 8.2 ---
+    # --- PHP ---
     php${PHPVERSION} php${PHPVERSION}-cli php${PHPVERSION}-common \
     php${PHPVERSION}-curl php${PHPVERSION}-gd php${PHPVERSION}-mbstring \
     php${PHPVERSION}-mysql php${PHPVERSION}-xml php${PHPVERSION}-intl \
@@ -63,7 +68,6 @@ RUN apt-get update \
     asterisk${ASTERISK_VERSION}-sqlite3 \
     asterisk${ASTERISK_VERSION}-res-digium-phone \
     asterisk${ASTERISK_VERSION}-voicemail \
-    asterisk${ASTERISK_VERSION}.0-freepbx-asterisk-modules \
     asterisk-version-switch \
     asterisk-sounds-core-en-ulaw \
     # --- Network services ---
@@ -79,20 +83,29 @@ RUN apt-get update \
     python3-mysqldb python-is-python3 \
     # --- UCP module deps ---
     pkgconf libicu-dev \
-    # --- Runtime libraries (Asterisk / FreePBX modules) ---
-    liburiparser1 libavdevice59 \
-    libsrtp2-1 libspandsp2 libncurses5 \
-    libical3 libneon27 libsnmp40 libtonezone \
-    libunbound8 libsybdb5 libspeexdsp1 libiksemel3 \
-    libresample1 libgmime-3.0-0 libc-client2007e \
-    imagemagick libbluetooth3 \
+    # --- Runtime libraries ---
+    liburiparser1 imagemagick libbluetooth3 \
     # --- Node.js & npm ---
     nodejs npm \
-    # --- FreePBX system-level packages (FPBXPKGS) ---
-    sysadmin17 sangoma-pbx17 \
     # --- IonCube (required by commercial modules) ---
     ioncube-loader-82 \
-  && (apt-get install -y libfdk-aac2 || true) \
+  && echo ">>> Installing FreePBX system packages (FPBXPKGS)..." \
+  && ln -sf /bin/true /usr/bin/systemctl \
+  && apt-get install -y -o Dpkg::Options::="--force-confnew" -o Dpkg::Options::="--force-overwrite" \
+       sysadmin17 sangoma-pbx17 \
+  && rm -f /usr/bin/systemctl \
+  && echo ">>> Installing additional runtime libraries (non-fatal if missing)..." \
+  && for pkg in \
+       asterisk${ASTERISK_VERSION}.0-freepbx-asterisk-modules \
+       libavdevice59 libsrtp2-1 libspandsp2 libncurses5 \
+       libical3 libneon27 libsnmp40 libtonezone \
+       libunbound8 libsybdb5 libspeexdsp1 libiksemel3 \
+       libresample1 libgmime-3.0-0 libc-client2007e \
+       libfdk-aac2; do \
+     apt-get install -y "$pkg" 2>/dev/null \
+       && echo "  installed: $pkg" \
+       || echo "  skipped (not available): $pkg"; \
+  done \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Configure asterisk user, Apache, PHP
